@@ -3,6 +3,7 @@ import {
   BookOpen,
   FileText,
   Library,
+  List,
   Minus,
   Moon,
   Plus,
@@ -25,7 +26,7 @@ import { Book, BookFormat, books, getBookTextStats } from "./data/books";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
 
-type View = "library" | "reader";
+type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
 
 type ReaderSettings = {
@@ -84,7 +85,7 @@ function formatLabel(format: BookFormat) {
 }
 
 function App() {
-  const [view, setView] = useState<View>("library");
+  const [view, setView] = useState<View>("welcome");
   const [query, setQuery] = useState("");
   const [libraryBooks, setLibraryBooks] = useState<Book[]>(books);
   const [activeBook, setActiveBook] = useState<Book>(books[0]);
@@ -202,7 +203,9 @@ function App() {
 
   return (
     <main className="app-shell">
-      {view === "library" ? (
+      {view === "welcome" ? (
+        <WelcomeView onStart={() => setView("library")} />
+      ) : view === "library" ? (
         <LibraryView
           books={filteredBooks}
           query={query}
@@ -225,6 +228,30 @@ function App() {
         />
       )}
     </main>
+  );
+}
+
+function WelcomeView({ onStart }: { onStart: () => void }) {
+  return (
+    <section className="welcome-screen" aria-label="欢迎界面">
+      <div className="welcome-dust welcome-dust-left" aria-hidden="true" />
+      <div className="welcome-dust welcome-dust-right" aria-hidden="true" />
+
+      <div className="welcome-card">
+        <span className="welcome-tag">Pause for a softer read</span>
+        <h1 className="welcome-title">
+          <span>Lumen · </span>
+          <span className="welcome-title-cn">微光</span>
+        </h1>
+        <p className="welcome-subtitle">A little light, just when you need it.</p>
+
+        <div className="welcome-start-wrap">
+          <button className="welcome-start-button" type="button" onClick={onStart}>
+            start
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -264,10 +291,10 @@ function LibraryView({
     <div className="library-layout">
       <aside className="library-sidebar" aria-label="书库导航">
         <div className="brand-block">
-          <div className="brand-mark">G</div>
+          <div className="brand-mark">L</div>
           <div>
-            <strong>GVIS Reader</strong>
-            <span>基础阅读器</span>
+            <strong>Lumen · 微光</strong>
+            <span>A little light, just when you need it.</span>
           </div>
         </div>
 
@@ -380,8 +407,14 @@ function BookTile({ book, progress, canDelete, onOpenBook, onDeleteBook }: BookT
             {book.format !== "pdf" && <span>{stats.sections} 节</span>}
             <span>{tertiaryStat}</span>
           </div>
-          <div className="book-progress" aria-label={`阅读进度 ${formatPercent(progress)}`}>
-            <span style={{ width: formatPercent(progress) }} />
+          <div className="book-progress-block">
+            <div className="book-progress-meta" aria-hidden="true">
+              <span>阅读进度</span>
+              <span>{formatPercent(progress)}</span>
+            </div>
+            <div className="book-progress" aria-label={`阅读进度 ${formatPercent(progress)}`}>
+              <span style={{ width: formatPercent(progress) }} />
+            </div>
           </div>
         </div>
       </button>
@@ -430,13 +463,32 @@ function ReaderView({
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const restoringRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
+  const [tocOpen, setTocOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [topbarHidden, setTopbarHidden] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const documentStyle = {
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
   } as CSSProperties;
+  const tocItems = useMemo(() => {
+    if (isPdf) {
+      return Array.from({ length: book.pdf?.pageCount ?? 0 }, (_, index) => ({
+        id: `page-${index + 1}`,
+        label: `第 ${index + 1} 页`,
+        meta: String(index + 1),
+        pageNumber: index + 1,
+      }));
+    }
+
+    return book.sections.map((section, index) => ({
+      id: section.id,
+      label: section.heading || `第 ${index + 1} 节`,
+      meta: section.label || String(index + 1),
+    }));
+  }, [book.pdf?.pageCount, book.sections, isPdf]);
 
   const saveCurrentProgress = useCallback(() => {
     const stage = stageRef.current;
@@ -450,10 +502,23 @@ function ReaderView({
   const handleScroll = useCallback(() => {
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(() => {
+      const stage = stageRef.current;
+      if (stage && !tocOpen && !settingsOpen) {
+        const currentTop = stage.scrollTop;
+        const lastTop = lastScrollTopRef.current;
+
+        if (currentTop > 88 && currentTop - lastTop > 10) {
+          setTopbarHidden(true);
+        } else if (currentTop < 36 || lastTop - currentTop > 10) {
+          setTopbarHidden(false);
+        }
+
+        lastScrollTopRef.current = currentTop;
+      }
       saveCurrentProgress();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress]);
+  }, [saveCurrentProgress, settingsOpen, tocOpen]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
     const stage = stageRef.current;
@@ -464,6 +529,25 @@ function ReaderView({
     });
   }, []);
 
+  const jumpToTocItem = useCallback(
+    (item: { id: string; pageNumber?: number }) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      const selector =
+        item.pageNumber !== undefined
+          ? `[data-page-number="${item.pageNumber}"]`
+          : `[data-section-id="${item.id}"]`;
+      const target = stage.querySelector<HTMLElement>(selector);
+      if (!target) return;
+
+      const top = target.offsetTop - 18;
+      stage.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+      setTocOpen(false);
+    },
+    [],
+  );
+
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -472,12 +556,20 @@ function ReaderView({
     const animationFrame = window.requestAnimationFrame(() => {
       const maxScroll = stage.scrollHeight - stage.clientHeight;
       stage.scrollTop = maxScroll > 0 ? maxScroll * progress : 0;
+      lastScrollTopRef.current = stage.scrollTop;
+      setTopbarHidden(false);
       restoringRef.current = false;
       saveCurrentProgress();
     });
 
     return () => window.cancelAnimationFrame(animationFrame);
   }, [book.id]);
+
+  useEffect(() => {
+    if (tocOpen || settingsOpen) {
+      setTopbarHidden(false);
+    }
+  }, [settingsOpen, tocOpen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -520,22 +612,61 @@ function ReaderView({
   };
 
   return (
-    <section className={`reader-screen theme-${settings.theme}`} aria-label={`${book.title} 阅读器`}>
+    <section
+      className={`reader-screen theme-${settings.theme}${topbarHidden ? " topbar-hidden" : ""}`}
+      aria-label={`${book.title} 阅读器`}
+    >
       <header className="reader-topbar">
-        <button className="icon-button" type="button" onClick={onBack} aria-label="返回书库" title="返回书库">
-          <ArrowLeft size={21} strokeWidth={2.2} />
-        </button>
+        <div className="reader-left-tools">
+          <div className="toc-wrap">
+            <button
+              className={`icon-button${tocOpen ? " active" : ""}`}
+              type="button"
+              onClick={() => {
+                setTocOpen((open) => !open);
+                setSettingsOpen(false);
+              }}
+              aria-label="打开目录"
+              title="目录"
+            >
+              <List size={20} strokeWidth={2.2} />
+            </button>
+            {tocOpen && (
+              <div className="toc-popover">
+                <div className="toc-header">目录</div>
+                <div className="toc-list">
+                  {tocItems.map((item) => (
+                    <button
+                      className="toc-item"
+                      key={item.id}
+                      type="button"
+                      onClick={() => jumpToTocItem(item)}
+                    >
+                      <span>{item.label}</span>
+                      <strong>{item.meta}</strong>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <button className="icon-button" type="button" onClick={onBack} aria-label="返回书库" title="返回书库">
+            <ArrowLeft size={21} strokeWidth={2.2} />
+          </button>
+        </div>
 
         <div className="reader-title">
           <strong>{book.title}</strong>
-          <span>{book.author}</span>
         </div>
 
         <div className="reader-tools">
           <button
             className={`icon-button${settingsOpen ? " active" : ""}`}
             type="button"
-            onClick={() => setSettingsOpen((open) => !open)}
+            onClick={() => {
+              setSettingsOpen((open) => !open);
+              setTocOpen(false);
+            }}
             aria-label="打开排版设置"
             title="排版设置"
           >
@@ -621,17 +752,6 @@ function ReaderView({
         )}
       </div>
 
-      <footer className="reader-footer">
-        <span>{formatPercent(progress)}</span>
-        {isPdf ? (
-          <span>{stats.pages} 页</span>
-        ) : (
-          <>
-            <span>{stats.sections} 节</span>
-            <span>{stats.paragraphs} 段</span>
-          </>
-        )}
-      </footer>
     </section>
   );
 }
@@ -651,7 +771,7 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
       </header>
 
       {book.sections.map((section, sectionIndex) => (
-        <section className="reader-section" key={section.id}>
+        <section className="reader-section" data-section-id={section.id} key={section.id}>
           {(section.label || section.heading) && (
             <header className="section-header">
               {section.label && <span>{section.label}</span>}
@@ -830,7 +950,12 @@ function PdfPageCanvas({ pdfDocument, pageNumber, zoom }: PdfPageCanvasProps) {
   }, [isVisible, pageNumber, pdfDocument, zoom]);
 
   return (
-    <section className="pdf-page" ref={wrapperRef} aria-label={`第 ${pageNumber} 页`}>
+    <section
+      className="pdf-page"
+      data-page-number={pageNumber}
+      ref={wrapperRef}
+      aria-label={`第 ${pageNumber} 页`}
+    >
       <canvas ref={canvasRef} />
       {status !== "rendered" && (
         <div className="pdf-page-status">

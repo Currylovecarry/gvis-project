@@ -1,3 +1,7 @@
+# Lumen · 微光
+
+A little light, just when you need it.
+
 # 项目概述
 
 Traditional reading is a purely cognitive process that often leads to

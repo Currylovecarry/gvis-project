@@ -34,7 +34,7 @@ export const books: Book[] = [
   {
     id: "slack-water",
     title: "Slack Water",
-    author: "GVIS Prototype",
+    author: "Lumen Studio",
     format: "sample",
     description: "A short narrative sample for building the base reader.",
     sections: [
