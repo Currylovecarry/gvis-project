@@ -32,7 +32,7 @@ import { Book, BookFormat, books, getBookTextStats } from "./data/books";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
 
-type View = "library" | "reader";
+type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
 type ReaderMode = "scroll" | "paged";
 
@@ -205,7 +205,7 @@ const preloadedBooks = [
 ];
 
 function App() {
-  const [view, setView] = useState<View>("library");
+  const [view, setView] = useState<View>("welcome");
   const [query, setQuery] = useState("");
   const [libraryBooks, setLibraryBooks] = useState<Book[]>(books);
   const [activeBook, setActiveBook] = useState<Book>(books[0]);
@@ -352,7 +352,9 @@ function App() {
 
   return (
     <main className="app-shell">
-      {view === "library" ? (
+      {view === "welcome" ? (
+        <WelcomeView onEnter={() => setView("library")} />
+      ) : view === "library" ? (
         <LibraryView
           books={filteredBooks}
           query={query}
@@ -375,6 +377,48 @@ function App() {
         />
       )}
     </main>
+  );
+}
+
+type WelcomeViewProps = {
+  onEnter: () => void;
+};
+
+function WelcomeView({ onEnter }: WelcomeViewProps) {
+  useEffect(() => {
+    const timer = window.setTimeout(onEnter, 3000);
+    return () => window.clearTimeout(timer);
+  }, [onEnter]);
+
+  return (
+    <section className="welcome-screen" aria-label="Lumen 微光">
+      <div className="welcome-journal" aria-hidden="true">
+        <img className="journal-sticker sticker-1355" src="/start/IMG_1355.jpg" alt="" />
+        <img className="journal-sticker sticker-1356" src="/start/IMG_1356.jpg" alt="" />
+        <img className="journal-sticker sticker-1357" src="/start/IMG_1357.jpg" alt="" />
+        <img className="journal-sticker sticker-1358" src="/start/IMG_1358.jpg" alt="" />
+        <img className="journal-sticker sticker-1359" src="/start/IMG_1359.jpg" alt="" />
+        <img className="journal-sticker sticker-1360" src="/start/IMG_1360.jpg" alt="" />
+        <img className="journal-sticker sticker-1361" src="/start/IMG_1361.jpg" alt="" />
+        <img className="journal-sticker sticker-1362" src="/start/IMG_1362.jpg" alt="" />
+        <img className="journal-sticker sticker-1363" src="/start/IMG_1363.jpg" alt="" />
+        <img className="journal-sticker sticker-1364" src="/start/IMG_1364.jpg" alt="" />
+        <img className="journal-sticker sticker-1365" src="/start/IMG_1365.jpg" alt="" />
+        <img className="journal-sticker sticker-1366" src="/start/IMG_1366.jpg" alt="" />
+        <span className="journal-note note-date">July 02</span>
+        <span className="journal-note note-soft">quiet reading</span>
+      </div>
+      <div className="welcome-card">
+        <div className="welcome-brandmark">
+          <h1 className="welcome-title">
+            <span>Lumen · </span>
+            <span className="welcome-title-cn">微光</span>
+          </h1>
+        </div>
+        <p className="welcome-subtitle">A little light, just when you need it.</p>
+        <div className="welcome-loading" aria-hidden="true" />
+      </div>
+    </section>
   );
 }
 

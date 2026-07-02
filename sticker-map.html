@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>贴纸位置图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f4f0e8; display: flex; justify-content: center; padding: 24px; font-family: sans-serif; }
+  .screen {
+    position: relative;
+    width: 600px;
+    height: 700px;
+    background: linear-gradient(90deg, rgba(31,30,26,.03) 1px, transparent 1px),
+                linear-gradient(180deg, rgba(31,30,26,.02) 1px, transparent 1px),
+                linear-gradient(180deg, #fbfaf7 0%, #f4f0e8 100%);
+    background-size: 36px 36px, 36px 36px, auto;
+    border: 1px solid #d4c9b8;
+    overflow: hidden;
+  }
+  .dot {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(145, 132, 122, 0.25);
+    color: #2b2926;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid rgba(145, 132, 122, 0.5);
+    transform: translate(-50%, -50%);
+    cursor: default;
+    z-index: 2;
+  }
+  .dot.note {
+    background: rgba(184, 199, 154, 0.3);
+    border-color: rgba(184, 199, 154, 0.6);
+    font-style: italic;
+  }
+  .welcome-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 340px;
+    height: 100px;
+    background: rgba(255,255,255,0.7);
+    border: 1px dashed rgba(145,132,122,0.3);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(145,132,122,0.5);
+    font-size: 13px;
+    z-index: 1;
+  }
+  .legend {
+    position: absolute;
+    right: -200px;
+    top: 0;
+    width: 180px;
+    font-size: 12px;
+    color: #6f6a61;
+    line-height: 1.8;
+  }
+  .legend strong { color: #2b2926; font-size: 13px; }
+  .pos { color: #999; font-size: 11px; }
+</style>
+</head>
+<body>
+<div style="display:flex;gap:32px;align-items:flex-start;">
+<div class="screen">
+  <div class="welcome-card">welcome-card 居中区域</div>
+
+  <div class="dot" style="left:18%;top:4vh"   title="1355">1355</div>
+  <div class="dot" style="left:50%;top:14vh"   title="1366">1366</div>
+  <div class="dot" style="left:6%;top:24vh"    title="1363">1363</div>
+  <div class="dot" style="left:8%;top:42vh"    title="note-date" class="dot note">📅</div>
+  <div class="dot" style="left:10%;top:58vh"   title="1360">1360</div>
+  <div class="dot" style="left:16%;top:72vh"   title="1357">1357</div>
+  <div class="dot" style="left:20%;top:78vh"   title="1365">1365</div>
+  <div class="dot" style="left:38%;top:96vh"   title="1362">1362</div>
+
+  <div class="dot" style="right:14%;top:8vh"   title="1358">1358</div>
+  <div class="dot" style="right:10%;top:38vh"  title="1356">1356</div>
+  <div class="dot" style="right:8%;top:62vh"   title="note-soft">✏️</div>
+  <div class="dot" style="right:30%;top:68vh"  title="1364">1364</div>
+  <div class="dot" style="right:18%;top:72vh"  title="1361">1361</div>
+  <div class="dot" style="right:18%;top:92vh"  title="1359">1359</div>
+</div>
+
+<div class="legend">
+  <strong>贴纸位置索引</strong><br><br>
+  <b>左侧区域</b><br>
+  1355 <span class="pos">left 18%, top 4vh</span><br>
+  1366 <span class="pos">center, top 14vh</span><br>
+  1363 <span class="pos">left 6%, top 24vh</span><br>
+  note  <span class="pos">left 8%, top 42vh</span><br>
+  1360 <span class="pos">left 10%, top 58vh</span><br>
+  1357 <span class="pos">left 16%, top 72vh</span><br>
+  1365 <span class="pos">left 20%, top 78vh</span><br>
+  1362 <span class="pos">left 38%, top 96vh</span><br><br>
+  <b>右侧区域</b><br>
+  1358 <span class="pos">right 14%, top 8vh</span><br>
+  1356 <span class="pos">right 10%, top 38vh</span><br>
+  note  <span class="pos">right 8%, top 62vh</span><br>
+  1364 <span class="pos">right 30%, top 68vh</span><br>
+  1361 <span class="pos">right 18%, top 72vh</span><br>
+  1359 <span class="pos">right 18%, top 92vh</span>
+</div>
+</div>
+</body>
+</html>

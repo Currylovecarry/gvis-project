@@ -75,32 +75,143 @@ button {
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 24%, rgba(228, 220, 208, 0.24), transparent 22%),
-    radial-gradient(circle at 82% 76%, rgba(234, 226, 216, 0.28), transparent 24%),
-    linear-gradient(180deg, #fbf8f3 0%, var(--paper-warm) 100%);
+    linear-gradient(90deg, rgba(31, 30, 26, 0.026) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(31, 30, 26, 0.022) 1px, transparent 1px),
+    linear-gradient(180deg, #fbfaf7 0%, #f4f0e8 100%);
+  background-size: 36px 36px, 36px 36px, auto;
 }
 
-.welcome-dust {
+.welcome-journal {
   position: absolute;
-  border-radius: 999px;
-  filter: blur(2px);
-  opacity: 0.42;
+  inset: 0;
+  pointer-events: none;
 }
 
-.welcome-dust-left {
-  top: 12%;
+.journal-sticker,
+.journal-note {
+  position: absolute;
+}
+
+.journal-sticker {
+  display: block;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.72;
+  filter: grayscale(1) contrast(1.25);
+  mix-blend-mode: multiply;
+}
+
+.sticker-1355 {
+  top: 4vh;
+  left: 18%;
+  width: clamp(68px, 7vw, 104px);
+  transform: rotate(-8deg);
+}
+
+.sticker-1356 {
+  top: 38vh;
+  right: 10%;
+  width: clamp(118px, 13vw, 188px);
+  opacity: 0.5;
+  transform: rotate(3deg);
+}
+
+.sticker-1357 {
+  left: 25%;
+  bottom: 28vh;
+  width: clamp(82px, 10vw, 142px);
+  opacity: 0.5;
+  transform: rotate(7deg);
+}
+
+.sticker-1358 {
+  right: 14%;
+  top: 8vh;
+  width: clamp(78px, 9vw, 132px);
+  opacity: 0.58;
+  transform: rotate(-5deg);
+}
+
+.sticker-1359 {
+  right: 18%;
+  bottom: 8vh;
+  width: clamp(112px, 14vw, 190px);
+  transform: rotate(4deg);
+}
+
+.sticker-1360 {
   left: 10%;
-  width: 220px;
-  height: 220px;
-  background: radial-gradient(circle, rgba(222, 214, 202, 0.24), transparent 68%);
+  top: 58vh;
+  width: clamp(96px, 11vw, 152px);
+  opacity: 0.54;
+  transform: rotate(-4deg);
 }
 
-.welcome-dust-right {
+.sticker-1361 {
+  right: 18%;
+  top: 72vh;
+  width: clamp(78px, 9vw, 136px);
+  opacity: 0.44;
+  transform: rotate(8deg);
+}
+
+.sticker-1362 {
+  left: 38%;
+  bottom: 4vh;
+  width: clamp(70px, 8vw, 118px);
+  opacity: 0.5;
+  transform: rotate(-10deg);
+}
+
+.sticker-1363 {
+  left: 6%;
+  top: 24vh;
+  width: clamp(64px, 7vw, 104px);
+  opacity: 0.48;
+  transform: rotate(5deg);
+}
+
+.sticker-1364 {
+  right: 23%;
+  bottom: 32vh;
+  width: clamp(112px, 16vw, 230px);
+  opacity: 0.38;
+  transform: rotate(-4deg);
+}
+
+.sticker-1365 {
+  top: 78vh;
+  left: 20%;
+  width: clamp(82px, 9vw, 138px);
+  opacity: 0.48;
+  transform: rotate(3deg);
+}
+
+.sticker-1366 {
+  top: 14vh;
+  left: 50%;
+  width: clamp(82px, 10vw, 146px);
+  opacity: 0.42;
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+.journal-note {
+  color: rgba(49, 47, 41, 0.52);
+  font-family: var(--reader-hand);
+  font-size: clamp(16px, 2vw, 22px);
+  line-height: 1;
+}
+
+.note-date {
+  top: 42vh;
+  left: 8%;
+  transform: rotate(-5deg);
+}
+
+.note-soft {
   right: 8%;
-  bottom: 10%;
-  width: 280px;
-  height: 280px;
-  background: radial-gradient(circle, rgba(224, 214, 201, 0.22), transparent 70%);
+  top: 62vh;
+  transform: rotate(4deg);
 }
 
 .welcome-card {
@@ -108,78 +219,75 @@ button {
   z-index: 1;
   display: grid;
   justify-items: center;
-  width: min(760px, calc(100vw - 40px));
-  padding: 48px 24px 80px;
+  width: min(620px, calc(100vw - 48px));
+  padding: 44px 24px 58px;
   text-align: center;
 }
 
-.welcome-tag {
-  margin-bottom: 16px;
-  color: rgba(88, 80, 73, 0.7);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.welcome-brandmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2vw, 18px);
+}
+
+.welcome-logo {
+  width: clamp(44px, 5.8vw, 68px);
+  height: clamp(44px, 5.8vw, 68px);
+  margin-bottom: 0;
+  object-fit: contain;
+  opacity: 0.46;
+  filter: grayscale(1) contrast(1.55) brightness(0.7);
+  mix-blend-mode: multiply;
 }
 
 .welcome-title {
   margin: 0;
-  color: var(--ink-hand);
-  font-family: var(--display);
-  font-size: clamp(50px, 8.6vw, 92px);
+  color: #24231f;
+  font-family: var(--reader-hand-title);
+  font-size: clamp(38px, 5.5vw, 58px);
   font-weight: 400;
-  letter-spacing: 0.025em;
-  line-height: 0.98;
+  letter-spacing: 0;
+  line-height: 1.02;
 }
 
 .welcome-title-cn {
-  font-family: "Kaiti SC", "STKaiti", "Songti SC", "STSong", serif;
-  font-size: 0.8em;
+  font-family: var(--reader-hand-cn);
+  font-size: 0.76em;
   font-weight: 400;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 .welcome-subtitle {
-  margin: 14px 0 0;
-  color: rgba(88, 80, 73, 0.76);
-  font-family: var(--display);
-  font-size: clamp(20px, 3.4vw, 28px);
-  line-height: 1.12;
+  margin: 18px 0 0;
+  color: rgba(56, 53, 47, 0.62);
+  font-family: var(--reader-hand);
+  font-size: clamp(16px, 2vw, 20px);
+  line-height: 1.35;
 }
 
-.welcome-start-wrap {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  margin-top: 34px;
+.welcome-loading {
+  width: min(180px, 42vw);
+  height: 2px;
+  margin-top: 36px;
+  overflow: hidden;
+  background: rgba(36, 35, 31, 0.1);
 }
 
-.welcome-start-button {
-  min-width: 138px;
-  min-height: 50px;
-  padding: 0 28px;
-  color: #fffdf8;
-  font-family: var(--display);
-  font-size: 28px;
-  letter-spacing: 0.06em;
-  background: linear-gradient(180deg, #b9b7b5 0%, #a9a7a5 100%);
-  border: 0;
-  border-radius: 999px;
-  box-shadow: 0 10px 24px rgba(108, 102, 95, 0.16);
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    filter 0.18s ease;
+.welcome-loading::after {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: rgba(36, 35, 31, 0.46);
+  transform: translateX(-100%);
+  animation: welcome-load 3s ease forwards;
+  content: "";
 }
 
-.welcome-start-button:hover {
-  transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 18px 34px rgba(108, 102, 95, 0.22);
-  filter: brightness(1.02);
-}
-
-.welcome-start-button:active {
-  transform: translateY(0);
+@keyframes welcome-load {
+  to {
+    transform: translateX(0);
+  }
 }
 
 .library-layout {
@@ -1604,17 +1712,72 @@ button {
 @media (max-width: 640px) {
   .welcome-card {
     width: min(100vw - 24px, 520px);
-    padding: 40px 10px 72px;
+    padding: 40px 10px 64px;
   }
 
-  .welcome-tag {
-    margin-bottom: 16px;
-    font-size: 11px;
-    letter-spacing: 0.12em;
+  .sticker-1355,
+  .sticker-1356,
+  .sticker-1358,
+  .sticker-1361,
+  .sticker-1362,
+  .sticker-1365,
+  .note-soft {
+    display: none;
+  }
+
+  .sticker-1357 {
+    top: 6vh;
+    left: auto;
+    right: 14px;
+    width: 56px;
+  }
+
+  .sticker-1366 {
+    top: 2vh;
+    left: 50%;
+    right: auto;
+    width: 48px;
+    transform: translateX(-50%) rotate(-3deg);
+  }
+
+  .sticker-1363 {
+    top: 16vh;
+    left: 12px;
+    width: 44px;
+  }
+
+  .sticker-1359 {
+    right: 12px;
+    top: auto;
+    bottom: 18vh;
+    width: 96px;
+  }
+
+  .sticker-1360 {
+    left: 10px;
+    right: auto;
+    top: auto;
+    bottom: 10vh;
+    width: 100px;
+  }
+
+  .sticker-1364 {
+    right: 10px;
+    bottom: 34vh;
+    width: 110px;
+  }
+
+  .note-date {
+    top: 28vh;
+    left: 14px;
+  }
+
+  .welcome-brandmark {
+    display: block;
   }
 
   .welcome-title {
-    font-size: clamp(48px, 16vw, 78px);
+    font-size: clamp(34px, 11vw, 48px);
   }
 
   .brand-title {
@@ -1622,17 +1785,7 @@ button {
   }
 
   .welcome-subtitle {
-    font-size: clamp(20px, 7vw, 28px);
-  }
-
-  .welcome-start-wrap {
-    margin-top: 38px;
-  }
-
-  .welcome-start-button {
-    min-width: 136px;
-    min-height: 52px;
-    font-size: 28px;
+    font-size: clamp(15px, 4.8vw, 19px);
   }
 
   .library-layout {
@@ -1917,6 +2070,11 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .welcome-loading::after {
+    animation: none;
+    transform: translateX(0);
+  }
+
   .reader-progress-track span {
     transition: none;
   }
