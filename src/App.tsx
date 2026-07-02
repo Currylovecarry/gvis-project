@@ -415,8 +415,10 @@ function LibraryView({
       <header className="mobile-header">
         <strong className="brand-title">
           <img className="brand-emblem" src="/site-icon.png" alt="" aria-hidden="true" />
-          <span>Lumen · </span>
-          <span className="brand-title-cn">微光</span>
+          <span className="brand-wordmark">
+            <span>Lumen · </span>
+            <span className="brand-title-cn">微光</span>
+          </span>
         </strong>
         <label className="import-button" htmlFor={fileInputId} aria-label="导入图书">
           <Upload size={18} strokeWidth={2.2} />
@@ -438,10 +440,11 @@ function LibraryView({
           <div>
             <strong className="brand-title">
               <img className="brand-emblem" src="/site-icon.png" alt="" aria-hidden="true" />
-              <span>Lumen · </span>
-              <span className="brand-title-cn">微光</span>
+              <span className="brand-wordmark">
+                <span>Lumen · </span>
+                <span className="brand-title-cn">微光</span>
+              </span>
             </strong>
-            <span>A little light, just when you need it.</span>
           </div>
         </div>
 
@@ -536,9 +539,6 @@ type BookTileProps = {
 };
 
 function BookTile({ book, progress, canDelete, onOpenBook, onDeleteBook }: BookTileProps) {
-  const stats = getBookTextStats(book);
-  const tertiaryStat = book.format === "pdf" ? `${stats.pages} 页` : `${stats.paragraphs} 段`;
-
   return (
     <article className="book-card">
       <button
@@ -552,11 +552,6 @@ function BookTile({ book, progress, canDelete, onOpenBook, onDeleteBook }: BookT
           <div>
             <strong>{book.title}</strong>
             <span>{book.author}</span>
-          </div>
-          <div className="book-stats">
-            <span>{formatLabel(book.format)}</span>
-            {book.format !== "pdf" && <span>{stats.sections} 节</span>}
-            <span>{tertiaryStat}</span>
           </div>
           <div className="book-progress-block">
             <div className="book-progress-meta" aria-hidden="true">
