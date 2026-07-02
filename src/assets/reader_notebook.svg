@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 280" fill="none">
+  <style>
+    .outline {
+      stroke: #111;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .thin {
+      stroke: #111;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+  <path class="outline" d="M78 40 Q76 22 90 18" />
+  <rect x="53" y="34" width="20" height="38" rx="2" fill="#111" />
+  <path class="outline" d="M95 36 L255 76 L222 218 L66 176 Z" />
+  <path class="thin" d="M255 76 L268 70 L235 212" />
+  <path class="thin" d="M222 218 L235 212" />
+  <path class="thin" d="M66 176 Q110 192 164 206" />
+  <path class="thin" d="M70 183 Q116 198 170 212" />
+  <path class="thin" d="M74 190 Q120 204 174 217" />
+  <g transform="rotate(22 170 120)">
+    <rect x="145" y="112" width="70" height="12" rx="6" class="thin" />
+    <path class="thin" d="M215 118 L228 118" />
+    <path class="thin" d="M145 118 L135 118 L129 121 L135 115 Z" />
+    <path class="thin" d="M160 112 L160 124" />
+    <path class="thin" d="M166 112 L166 124" />
+    <path class="thin" d="M172 112 L172 124" />
+  </g>
+</svg>

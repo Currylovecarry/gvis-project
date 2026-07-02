@@ -4,8 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fb0c8d41-9a7c-4922-86e7-f111d9ad1dce" name="更改" comment="">
+    <list default="true" id="fb0c8d41-9a7c-4922-86e7-f111d9ad1dce" name="更改" comment="Add sidebar illustration and update styles for improved reading experience">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/books.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/books.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/styles.css" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -53,6 +56,7 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "configurable.group.appearance",
+    "ts.external.directory.path": "/Users/chenqi/GVIS实现/gvis-application/node_modules/typescript/lib",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -73,12 +77,34 @@
       <option name="presentableId" value="Default" />
       <updated>1782370350666</updated>
       <workItem from="1782370352042" duration="1629000" />
-      <workItem from="1782961797975" duration="614000" />
+      <workItem from="1782961797975" duration="5489000" />
     </task>
+    <task id="LOCAL-00001" summary="Add sidebar illustration and update styles for improved reading experience">
+      <option name="closed" value="true" />
+      <created>1782964800459</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1782964800459</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Add sidebar illustration and update styles for improved reading experience">
+      <option name="closed" value="true" />
+      <created>1782964805166</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1782964805166</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Refine Lumen reader experience" />
+    <MESSAGE value="Add sidebar illustration and update styles for improved reading experience" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add sidebar illustration and update styles for improved reading experience" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

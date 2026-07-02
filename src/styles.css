@@ -206,7 +206,8 @@ button {
   align-items: flex-start;
   gap: 0;
   min-width: 0;
-  padding: 0 0 18px;
+  padding: 0 0 10px;
+  margin-top: 6px;
 }
 
 .brand-mark {
@@ -222,8 +223,9 @@ button {
 
 .brand-title {
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
   color: var(--reader-ink);
   font-family: var(--reader-hand-title);
   font-size: 28px;
@@ -231,10 +233,22 @@ button {
   letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .brand-title span {
   display: inline;
+}
+
+.brand-emblem {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-self: center;
+  object-fit: contain;
+  object-position: center center;
+  vertical-align: middle;
+  margin-top: -2px;
 }
 
 .brand-title-cn {
@@ -242,7 +256,7 @@ button {
 }
 
 .brand-block span {
-  margin-top: 8px;
+  margin-top: 4px;
   color: var(--reader-muted);
   font-family: var(--reader-hand);
   font-size: 18px;
@@ -316,7 +330,9 @@ button {
 }
 
 .nav-item span {
-  overflow: hidden;
+  position: relative;
+  display: inline-block;
+  overflow: visible;
   font-family: var(--reader-hand-cn);
   font-size: 18px;
   font-weight: 400;
@@ -325,18 +341,17 @@ button {
 }
 
 .nav-item.active {
-  position: relative;
   color: var(--reader-ink);
   background: transparent;
   box-shadow: none;
 }
 
-.nav-item.active::after {
+.nav-item.active span::after {
   position: absolute;
-  right: auto;
-  bottom: 2px;
+  bottom: -5px;
   left: 0;
-  width: 54px;
+  width: 100%;
+  min-width: 28px;
   height: 10px;
   border-bottom: 4px solid rgba(184, 199, 154, 0.9);
   border-radius: 999px;
@@ -431,8 +446,8 @@ button {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(184px, 220px));
-  gap: 34px 30px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px 20px;
   align-content: start;
   flex: 1 1 auto;
   min-height: 0;
@@ -507,27 +522,22 @@ button {
   box-shadow: none;
 }
 
-.book-cover::before {
+.book-cover-image {
   position: absolute;
-  top: 26px;
-  right: 24px;
-  left: 28px;
-  height: 64px;
-  border: 1px dashed rgba(31, 30, 26, 0.12);
-  border-radius: 0;
-  content: "";
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.5;
+}
+
+.book-cover::before {
+  display: none;
 }
 
 .book-cover::after {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  width: 72px;
-  height: 12px;
-  border-bottom: 2px solid rgba(184, 199, 154, 0.7);
-  border-radius: 999px;
-  transform: rotate(-2deg);
-  content: "";
+  display: none;
 }
 
 .book-cover.cover-epub {
@@ -861,8 +871,7 @@ button {
   display: none;
 }
 
-.toc-wrap .icon-button::after,
-.reader-left-tools > .icon-button::after {
+.reader-nav-button::after {
   color: var(--reader-ink);
   font-family: var(--reader-hand);
   font-size: 20px;
@@ -870,17 +879,33 @@ button {
   letter-spacing: 0.02em;
 }
 
-.toc-wrap .icon-button::after {
-  content: "notes";
-}
-
-.reader-left-tools > .icon-button::after {
+.reader-nav-home::after {
   content: "home";
 }
 
-.toc-wrap .icon-button.active::before,
-.reader-left-tools > .icon-button:hover::before,
-.reader-left-tools > .icon-button:focus-visible::before {
+.reader-nav-notes::after {
+  content: "notes";
+}
+
+.reader-nav-pages::after {
+  content: "pages";
+}
+
+.reader-nav-pages.active::before {
+  position: absolute;
+  right: -4px;
+  bottom: -8px;
+  left: -2px;
+  height: 10px;
+  border-bottom: 4px solid rgba(184, 199, 154, 0.9);
+  border-radius: 999px;
+  transform: rotate(-1.5deg);
+  content: "";
+}
+
+.reader-nav-notes.active::before,
+.reader-nav-button:hover::before,
+.reader-nav-button:focus-visible::before {
   position: absolute;
   right: -4px;
   bottom: -8px;
@@ -904,6 +929,60 @@ button {
 .icon-button.active {
   background: transparent;
   opacity: 0.72;
+}
+
+.reader-pages-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -6px;
+  padding: 4px 0 0 10px;
+}
+
+.reader-mode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 0;
+  color: var(--reader-muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+
+.reader-mode-button svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.reader-mode-button span {
+  position: relative;
+  display: inline-block;
+  font-family: var(--reader-hand);
+  font-size: 17px;
+  line-height: 1.1;
+}
+
+.reader-mode-button:hover {
+  opacity: 0.72;
+}
+
+.reader-mode-button.active {
+  color: var(--reader-ink);
+}
+
+.reader-mode-button.active span::after {
+  position: absolute;
+  right: -2px;
+  bottom: -5px;
+  left: -2px;
+  height: 8px;
+  border-bottom: 3px solid rgba(184, 199, 154, 0.9);
+  border-radius: 999px;
+  transform: rotate(-1.3deg);
+  content: "";
 }
 
 .toc-popover {
@@ -1096,6 +1175,24 @@ button {
   display: none;
 }
 
+.reader-corner-illustration {
+  position: absolute;
+  top: 92px;
+  right: clamp(48px, 8vw, 130px);
+  z-index: 2;
+  width: clamp(150px, 18vw, 220px);
+  pointer-events: none;
+}
+
+.reader-corner-illustration img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0.96;
+  transform: rotate(90deg);
+  transform-origin: center;
+}
+
 .reader-stage {
   position: relative;
   min-height: 0;
@@ -1122,6 +1219,62 @@ button {
 .theme-night .reader-document {
   border-color: transparent;
   box-shadow: none;
+}
+
+.paged-document {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 232px);
+  padding-bottom: 0;
+}
+
+.paged-page {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.paged-document-header {
+  margin-bottom: 66px;
+}
+
+.paged-footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  margin-top: 34px;
+  padding: 18px 0 6px;
+  color: var(--reader-muted);
+  border-top: 1px solid rgba(31, 30, 26, 0.08);
+  font-family: var(--reader-hand);
+  font-size: 15px;
+}
+
+.paged-footer span {
+  margin-left: auto;
+}
+
+.paged-turn-button {
+  min-width: 58px;
+  padding: 0 0 4px;
+  color: var(--reader-ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(31, 30, 26, 0.16);
+  font-family: var(--reader-hand);
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+
+.paged-turn-button:hover:not(:disabled) {
+  opacity: 0.72;
+}
+
+.paged-turn-button:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .pdf-document {
@@ -1227,7 +1380,7 @@ button {
   margin: 0 0 10px;
   color: var(--reader-ink);
   font-family: var(--reader-hand-title);
-  font-size: clamp(48px, 6.5vw, 74px);
+  font-size: clamp(30px, 4.2vw, 42px);
   font-weight: 400;
   letter-spacing: 0.01em;
   line-height: 0.95;
@@ -1268,7 +1421,7 @@ button {
   margin: 0;
   color: var(--reader-ink);
   font-family: var(--reader-hand-cn);
-  font-size: clamp(30px, 4vw, 44px);
+  font-size: clamp(22px, 2.8vw, 30px);
   font-weight: 400;
   line-height: 1.18;
 }
@@ -1276,8 +1429,8 @@ button {
 .section-header h2::after {
   position: absolute;
   bottom: -12px;
-  left: 6px;
-  width: 108px;
+  left: 0;
+  width: 100%;
   height: 10px;
   border-bottom: 4px solid rgba(184, 199, 154, 0.9);
   border-radius: 999px;
@@ -1366,9 +1519,12 @@ button {
     font-size: 24px;
   }
 
-  .toc-wrap .icon-button::after,
-  .reader-left-tools > .icon-button::after {
+  .reader-nav-button::after {
     font-size: 17px;
+  }
+
+  .reader-mode-button span {
+    font-size: 15px;
   }
 
   .reader-stage {
@@ -1381,7 +1537,7 @@ button {
   }
 
   .document-header h1 {
-    font-size: clamp(42px, 8vw, 58px);
+    font-size: clamp(28px, 5vw, 36px);
   }
 
   .reader-copy {
@@ -1391,6 +1547,12 @@ button {
   .reader-screen::before,
   .reader-screen::after {
     right: 28px;
+  }
+
+  .reader-corner-illustration {
+    top: 98px;
+    right: 32px;
+    width: 160px;
   }
 }
 
@@ -1470,6 +1632,10 @@ button {
     display: none;
   }
 
+  .reader-corner-illustration {
+    display: none;
+  }
+
   .reader-topbar {
     inset: 0 0 auto 0;
     flex-direction: row;
@@ -1494,6 +1660,12 @@ button {
     flex-direction: row;
     gap: 14px;
     margin-top: 0;
+    flex-wrap: wrap;
+  }
+
+  .reader-pages-panel {
+    flex-basis: 100%;
+    padding-left: 2px;
   }
 
   .reader-left-tools::after {
@@ -1519,12 +1691,17 @@ button {
     margin: 18px auto 72px;
   }
 
+  .paged-footer {
+    margin-top: 28px;
+    padding-bottom: 2px;
+  }
+
   .document-header {
     margin-bottom: 64px;
   }
 
   .document-header h1 {
-    font-size: clamp(38px, 13vw, 52px);
+    font-size: clamp(24px, 8vw, 32px);
   }
 
   .document-header span {
@@ -1532,7 +1709,7 @@ button {
   }
 
   .section-header h2 {
-    font-size: clamp(28px, 7vw, 36px);
+    font-size: clamp(20px, 5.2vw, 26px);
   }
 
   .reader-copy {

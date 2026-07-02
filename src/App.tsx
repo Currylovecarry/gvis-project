@@ -23,17 +23,35 @@ import {
   useState,
 } from "react";
 import booksCoffeeHanddrawn from "./assets/books_coffee_handdrawn.svg";
+import readerNotebook from "./assets/reader_notebook.svg";
+import logo1 from "./assets/logos/72084966-334c-451a-81b9-b37c9220db74-1782974934891_IMG_1347.svg";
+import logo3 from "./assets/logos/31b1e46e-0fe1-4702-936a-bdd805edd20f-1782974934894_IMG_1349.svg";
+import logo4 from "./assets/logos/bc34797c-7ded-48bc-87cc-cfcbfe5e204f-1782974934894_IMG_1348.svg";
+import logo5 from "./assets/logos/21ce9ae5-90df-4728-9433-34dee7d13417-1782975463348_Oe_2026-07-02_14.55.33.svg";
 import { Book, BookFormat, books, getBookTextStats } from "./data/books";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
 
 type View = "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
+type ReaderMode = "scroll" | "paged";
 
 type ReaderSettings = {
   fontScale: number;
   lineHeight: number;
   theme: ReaderTheme;
+};
+
+type PagedSection = {
+  sectionId: string;
+  label?: string;
+  heading?: string;
+  paragraphs: string[];
+};
+
+type PagedDocumentPage = {
+  id: string;
+  items: PagedSection[];
 };
 
 const progressKey = "gvis-reader-progress";
@@ -85,6 +103,95 @@ function formatLabel(format: BookFormat) {
   return labels[format];
 }
 
+function paginateSections(
+  sections: Book["sections"],
+  settings: ReaderSettings,
+): {
+  pages: PagedDocumentPage[];
+  firstPageIndexBySection: Record<string, number>;
+} {
+  const density = settings.fontScale * (settings.lineHeight / defaultSettings.lineHeight);
+  const targetCharsPerPage = Math.max(420, Math.round(920 / density));
+  const pages: PagedDocumentPage[] = [];
+  const firstPageIndexBySection: Record<string, number> = {};
+
+  let currentPage: PagedDocumentPage = { id: "page-1", items: [] };
+  let currentChars = 0;
+
+  const pushPage = () => {
+    if (!currentPage.items.length) return;
+    pages.push(currentPage);
+    currentPage = { id: `page-${pages.length + 1}`, items: [] };
+    currentChars = 0;
+  };
+
+  sections.forEach((section, sectionIndex) => {
+    let currentItem: PagedSection | null = null;
+    let itemChars = 0;
+    const headingCost = (section.heading?.length ?? 0) + (section.label?.length ?? 0) + 80;
+
+    const pushItem = () => {
+      if (!currentItem || !currentItem.paragraphs.length) return;
+      currentPage.items.push(currentItem);
+      currentChars += itemChars;
+      if (firstPageIndexBySection[section.id] === undefined) {
+        firstPageIndexBySection[section.id] = pages.length;
+      }
+      currentItem = null;
+      itemChars = 0;
+    };
+
+    section.paragraphs.forEach((paragraph, paragraphIndex) => {
+      const paragraphCost = Math.max(80, paragraph.length + 32);
+      const needsNewPage =
+        currentChars + itemChars + paragraphCost + (currentItem ? 0 : headingCost) >
+          targetCharsPerPage &&
+        (currentChars > 0 || itemChars > 0);
+
+      if (needsNewPage) {
+        pushItem();
+        pushPage();
+      }
+
+      if (!currentItem) {
+        currentItem = {
+          sectionId: section.id,
+          label: paragraphIndex === 0 ? section.label : undefined,
+          heading: paragraphIndex === 0 ? section.heading : undefined,
+          paragraphs: [],
+        };
+        itemChars += headingCost;
+      }
+
+      currentItem.paragraphs.push(paragraph);
+      itemChars += paragraphCost;
+
+      const isLastParagraph = paragraphIndex === section.paragraphs.length - 1;
+      if (isLastParagraph) {
+        pushItem();
+        const isLastSection = sectionIndex === sections.length - 1;
+        if (!isLastSection && currentChars >= targetCharsPerPage * 0.72) {
+          pushPage();
+        }
+      }
+    });
+  });
+
+  pushPage();
+
+  return {
+    pages: pages.length ? pages : [{ id: "page-1", items: [] }],
+    firstPageIndexBySection,
+  };
+}
+
+const coverImages = [logo1, logo3, logo4, logo5];
+
+const preloadedBooks = [
+  { path: "/books/the-deal.epub", id: "the-deal" },
+  { path: "/books/o-henry.epub", id: "o-henry" },
+];
+
 function App() {
   const [view, setView] = useState<View>("library");
   const [query, setQuery] = useState("");
@@ -93,9 +200,35 @@ function App() {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
   const [settings, setSettings] = useState<ReaderSettings>(readSettings);
+  const nextCoverRef = useRef(1);
   const [progressByBook, setProgressByBook] = useState<Record<string, number>>(() =>
     Object.fromEntries(books.map((book) => [book.id, getSavedProgress(book.id)])),
   );
+
+  useEffect(() => {
+    const loadPreloadedBooks = async () => {
+      for (const { path, id } of preloadedBooks) {
+        try {
+          const response = await fetch(path);
+          const blob = await response.blob();
+          const file = new File([blob], path.split("/").pop() || "book.epub", {
+            type: "application/epub+zip",
+          });
+          const book = await parseEpubFile(file);
+          book.id = id;
+          book.coverIndex = nextCoverRef.current;
+          nextCoverRef.current = (nextCoverRef.current + 1) % coverImages.length;
+          setLibraryBooks((prev) => {
+            if (prev.some((b) => b.id === id)) return prev;
+            return [...prev, book];
+          });
+        } catch (error) {
+          console.error(`Failed to load ${path}:`, error);
+        }
+      }
+    };
+    loadPreloadedBooks();
+  }, []);
 
   const filteredBooks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -169,6 +302,9 @@ function App() {
           : lowerName.endsWith(".pdf")
             ? await parsePdfFile(file)
             : createPlaceholderBook(file);
+
+      importedBook.coverIndex = nextCoverRef.current;
+      nextCoverRef.current = (nextCoverRef.current + 1) % coverImages.length;
 
       setLibraryBooks((currentBooks) => [importedBook, ...currentBooks]);
       setActiveBook(importedBook);
@@ -266,9 +402,9 @@ function LibraryView({
     <div className="library-layout">
       <aside className="library-sidebar" aria-label="书库导航">
         <div className="brand-block">
-          <div className="brand-mark">L</div>
           <div>
             <strong className="brand-title">
+              <img className="brand-emblem" src="/site-icon.png" alt="" aria-hidden="true" />
               <span>Lumen · </span>
               <span className="brand-title-cn">微光</span>
             </strong>
@@ -416,11 +552,11 @@ function BookTile({ book, progress, canDelete, onOpenBook, onDeleteBook }: BookT
 }
 
 function BookCover({ book }: { book: Book }) {
+  const coverImage = book.coverIndex !== undefined ? coverImages[book.coverIndex % coverImages.length] : null;
+
   return (
     <div className={`book-cover cover-${book.format}`} aria-hidden="true">
-      <span className="cover-format">{formatLabel(book.format)}</span>
-      <strong>{book.title}</strong>
-      <span>{book.author}</span>
+      {coverImage && <img src={coverImage} alt="" className="book-cover-image" />}
     </div>
   );
 }
@@ -448,13 +584,21 @@ function ReaderView({
   const lastScrollTopRef = useRef(0);
   const [tocOpen, setTocOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(false);
+  const [readerMode, setReaderMode] = useState<ReaderMode>("scroll");
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [topbarHidden, setTopbarHidden] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
+  const isPagedTextMode = readerMode === "paged" && !isPdf;
   const documentStyle = {
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
   } as CSSProperties;
+  const { pages: pagedPages, firstPageIndexBySection } = useMemo(
+    () => paginateSections(book.sections, settings),
+    [book.sections, settings],
+  );
   const tocItems = useMemo(() => {
     if (isPdf) {
       return Array.from({ length: book.pdf?.pageCount ?? 0 }, (_, index) => ({
@@ -469,51 +613,74 @@ function ReaderView({
       id: section.id,
       label: section.heading || `第 ${index + 1} 节`,
       meta: section.label || String(index + 1),
+      pageIndex: firstPageIndexBySection[section.id],
     }));
-  }, [book.pdf?.pageCount, book.sections, isPdf]);
+  }, [book.pdf?.pageCount, book.sections, firstPageIndexBySection, isPdf]);
 
   const saveCurrentProgress = useCallback(() => {
     const stage = stageRef.current;
-    if (!stage || restoringRef.current) return;
+    if (restoringRef.current) return;
 
-    const maxScroll = stage.scrollHeight - stage.clientHeight;
-    const nextProgress = maxScroll <= 0 ? 0 : stage.scrollTop / maxScroll;
+    const nextProgress = isPagedTextMode
+      ? pagedPages.length <= 1
+        ? 0
+        : currentPageIndex / (pagedPages.length - 1)
+      : !stage
+        ? 0
+        : (() => {
+            const maxScroll = stage.scrollHeight - stage.clientHeight;
+            return maxScroll <= 0 ? 0 : stage.scrollTop / maxScroll;
+          })();
     onProgressChange(book.id, nextProgress);
-  }, [book.id, onProgressChange]);
+  }, [book.id, currentPageIndex, isPagedTextMode, onProgressChange, pagedPages.length]);
 
   const handleScroll = useCallback(() => {
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(() => {
       const stage = stageRef.current;
-      if (stage && !tocOpen && !settingsOpen) {
-        const currentTop = stage.scrollTop;
-        const lastTop = lastScrollTopRef.current;
+      if (stage && !tocOpen && !settingsOpen && !pagesOpen) {
+        if (!isPagedTextMode) {
+          const currentTop = stage.scrollTop;
+          const lastTop = lastScrollTopRef.current;
 
-        if (currentTop > 88 && currentTop - lastTop > 10) {
-          setTopbarHidden(true);
-        } else if (currentTop < 36 || lastTop - currentTop > 10) {
+          if (currentTop > 88 && currentTop - lastTop > 10) {
+            setTopbarHidden(true);
+          } else if (currentTop < 36 || lastTop - currentTop > 10) {
+            setTopbarHidden(false);
+          }
+
+          lastScrollTopRef.current = currentTop;
+        } else {
           setTopbarHidden(false);
         }
-
-        lastScrollTopRef.current = currentTop;
       }
       saveCurrentProgress();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress, settingsOpen, tocOpen]);
+  }, [isPagedTextMode, pagesOpen, saveCurrentProgress, settingsOpen, tocOpen]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
+    if (isPagedTextMode) {
+      setCurrentPageIndex((current) => clamp(current + direction, 0, Math.max(pagedPages.length - 1, 0)));
+      return;
+    }
     const stage = stageRef.current;
     if (!stage) return;
     stage.scrollBy({
       top: direction * stage.clientHeight * 0.82,
       behavior: "smooth",
     });
-  }, []);
+  }, [isPagedTextMode, pagedPages.length]);
 
   const jumpToTocItem = useCallback(
-    (item: { id: string; pageNumber?: number }) => {
+    (item: { id: string; pageNumber?: number; pageIndex?: number }) => {
       const stage = stageRef.current;
+      if (isPagedTextMode && item.pageIndex !== undefined) {
+        setCurrentPageIndex(item.pageIndex);
+        setTocOpen(false);
+        return;
+      }
+
       if (!stage) return;
 
       const selector =
@@ -527,48 +694,76 @@ function ReaderView({
       stage.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
       setTocOpen(false);
     },
-    [],
+    [isPagedTextMode],
   );
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
     restoringRef.current = true;
     const animationFrame = window.requestAnimationFrame(() => {
-      const maxScroll = stage.scrollHeight - stage.clientHeight;
-      stage.scrollTop = maxScroll > 0 ? maxScroll * progress : 0;
-      lastScrollTopRef.current = stage.scrollTop;
+      if (isPagedTextMode) {
+        const nextPageIndex = pagedPages.length <= 1 ? 0 : Math.round(progress * (pagedPages.length - 1));
+        setCurrentPageIndex(clamp(nextPageIndex, 0, Math.max(pagedPages.length - 1, 0)));
+        lastScrollTopRef.current = 0;
+      } else {
+        const stage = stageRef.current;
+        if (!stage) return;
+        const maxScroll = stage.scrollHeight - stage.clientHeight;
+        stage.scrollTop = maxScroll > 0 ? maxScroll * progress : 0;
+        lastScrollTopRef.current = stage.scrollTop;
+      }
       setTopbarHidden(false);
       restoringRef.current = false;
-      saveCurrentProgress();
     });
 
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [book.id]);
+  }, [book.id, isPagedTextMode, pagedPages.length, progress]);
 
   useEffect(() => {
-    if (tocOpen || settingsOpen) {
+    if (tocOpen || settingsOpen || pagesOpen) {
       setTopbarHidden(false);
     }
-  }, [settingsOpen, tocOpen]);
+  }, [pagesOpen, settingsOpen, tocOpen]);
+
+  useEffect(() => {
+    if (!isPagedTextMode) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.scrollTo({ top: 0, behavior: "auto" });
+    lastScrollTopRef.current = 0;
+  }, [currentPageIndex, isPagedTextMode]);
+
+  useEffect(() => {
+    if (!isPagedTextMode || restoringRef.current) return;
+    onProgressChange(
+      book.id,
+      pagedPages.length <= 1 ? 0 : currentPageIndex / (pagedPages.length - 1),
+    );
+  }, [book.id, currentPageIndex, isPagedTextMode, onProgressChange, pagedPages.length]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onBack();
       if (event.key === "PageDown" || event.key === "ArrowDown") scrollByPage(1);
       if (event.key === "PageUp" || event.key === "ArrowUp") scrollByPage(-1);
-      if (event.key === "Home" && stageRef.current) {
-        stageRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      if (event.key === "Home") {
+        if (isPagedTextMode) {
+          setCurrentPageIndex(0);
+        } else if (stageRef.current) {
+          stageRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
-      if (event.key === "End" && stageRef.current) {
-        stageRef.current.scrollTo({ top: stageRef.current.scrollHeight, behavior: "smooth" });
+      if (event.key === "End") {
+        if (isPagedTextMode) {
+          setCurrentPageIndex(Math.max(pagedPages.length - 1, 0));
+        } else if (stageRef.current) {
+          stageRef.current.scrollTo({ top: stageRef.current.scrollHeight, behavior: "smooth" });
+        }
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onBack, scrollByPage]);
+  }, [isPagedTextMode, onBack, pagedPages.length, scrollByPage]);
 
   useEffect(() => {
     return () => {
@@ -600,13 +795,23 @@ function ReaderView({
     >
       <header className="reader-topbar">
         <div className="reader-left-tools">
+          <button
+            className="icon-button reader-nav-button reader-nav-home"
+            type="button"
+            onClick={onBack}
+            aria-label="返回书库"
+            title="返回书库"
+          >
+            <ArrowLeft size={21} strokeWidth={2.2} />
+          </button>
           <div className="toc-wrap">
             <button
-              className={`icon-button${tocOpen ? " active" : ""}`}
+              className={`icon-button reader-nav-button reader-nav-notes${tocOpen ? " active" : ""}`}
               type="button"
               onClick={() => {
                 setTocOpen((open) => !open);
                 setSettingsOpen(false);
+                setPagesOpen(false);
               }}
               aria-label="打开目录"
               title="目录"
@@ -632,9 +837,49 @@ function ReaderView({
               </div>
             )}
           </div>
-          <button className="icon-button" type="button" onClick={onBack} aria-label="返回书库" title="返回书库">
-            <ArrowLeft size={21} strokeWidth={2.2} />
+          <button
+            className={`icon-button reader-nav-button reader-nav-pages${pagesOpen ? " active" : ""}`}
+            type="button"
+            onClick={() => {
+              setPagesOpen((open) => !open);
+              setTocOpen(false);
+              setSettingsOpen(false);
+            }}
+            aria-label="Pages"
+            title="Pages"
+          >
+            <FileText size={20} strokeWidth={2.2} />
           </button>
+          {pagesOpen && (
+            <div className="reader-pages-panel">
+              <button
+                className={`reader-mode-button${readerMode === "scroll" ? " active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setReaderMode("scroll");
+                  setPagesOpen(false);
+                }}
+                aria-label="滚动阅读模式"
+                title="滚动阅读"
+              >
+                <List size={16} strokeWidth={2.2} />
+                <span>scroll</span>
+              </button>
+              <button
+                className={`reader-mode-button${readerMode === "paged" ? " active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setReaderMode("paged");
+                  setPagesOpen(false);
+                }}
+                aria-label="翻页阅读模式"
+                title="翻页阅读"
+              >
+                <BookOpen size={16} strokeWidth={2.2} />
+                <span>paged</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="reader-title">
@@ -652,6 +897,7 @@ function ReaderView({
             onClick={() => {
               setSettingsOpen((open) => !open);
               setTocOpen(false);
+              setPagesOpen(false);
             }}
             aria-label="打开排版设置"
             title="排版设置"
@@ -731,8 +977,19 @@ function ReaderView({
       </div>
 
       <div className="reader-stage" ref={stageRef} onScroll={handleScroll}>
+        <div className="reader-corner-illustration" aria-hidden="true">
+          <img src={readerNotebook} alt="" />
+        </div>
         {isPdf ? (
           <PdfDocumentView book={book} zoom={settings.fontScale} />
+        ) : isPagedTextMode ? (
+          <PagedTextDocumentView
+            book={book}
+            currentPageIndex={currentPageIndex}
+            documentStyle={documentStyle}
+            onPageChange={setCurrentPageIndex}
+            pages={pagedPages}
+          />
         ) : (
           <TextDocumentView book={book} documentStyle={documentStyle} />
         )}
@@ -772,6 +1029,78 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
           {sectionIndex < book.sections.length - 1 && <div className="section-divider" aria-hidden="true" />}
         </section>
       ))}
+    </article>
+  );
+}
+
+type PagedTextDocumentViewProps = {
+  book: Book;
+  currentPageIndex: number;
+  documentStyle: CSSProperties;
+  onPageChange: (index: number) => void;
+  pages: PagedDocumentPage[];
+};
+
+function PagedTextDocumentView({
+  book,
+  currentPageIndex,
+  documentStyle,
+  onPageChange,
+  pages,
+}: PagedTextDocumentViewProps) {
+  const page = pages[currentPageIndex] ?? pages[0];
+  const isFirstPage = currentPageIndex === 0;
+  const isLastPage = currentPageIndex >= pages.length - 1;
+
+  return (
+    <article className="reader-document paged-document" style={documentStyle}>
+      <div className="paged-page" data-page-index={currentPageIndex}>
+        {currentPageIndex === 0 && (
+          <header className="document-header paged-document-header">
+            <p>{formatLabel(book.format)}</p>
+            <h1>{book.title}</h1>
+            <span>{book.author}</span>
+          </header>
+        )}
+
+        {page.items.map((item) => (
+          <section className="reader-section" data-section-id={item.sectionId} key={`${page.id}-${item.sectionId}`}>
+            {(item.label || item.heading) && (
+              <header className="section-header">
+                {item.label && <span>{item.label}</span>}
+                {item.heading && <h2>{item.heading}</h2>}
+              </header>
+            )}
+            <div className="reader-copy">
+              {item.paragraphs.map((paragraph, paragraphIndex) => (
+                <p key={`${page.id}-${item.sectionId}-${paragraphIndex}`}>{paragraph}</p>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <footer className="paged-footer">
+        <button
+          className="paged-turn-button"
+          type="button"
+          onClick={() => onPageChange(Math.max(currentPageIndex - 1, 0))}
+          disabled={isFirstPage}
+        >
+          prev
+        </button>
+        <span aria-hidden="true">
+          {currentPageIndex + 1}/{pages.length}
+        </span>
+        <button
+          className="paged-turn-button"
+          type="button"
+          onClick={() => onPageChange(Math.min(currentPageIndex + 1, pages.length - 1))}
+          disabled={isLastPage}
+        >
+          next
+        </button>
+      </footer>
     </article>
   );
 }

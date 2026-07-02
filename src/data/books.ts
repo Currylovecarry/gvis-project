@@ -14,6 +14,7 @@ export type Book = {
   format: BookFormat;
   description?: string;
   sections: ReaderSection[];
+  coverIndex?: number;
   pdf?: {
     data: ArrayBuffer;
     pageCount: number;
@@ -36,6 +37,7 @@ export const books: Book[] = [
     title: "Slack Water",
     author: "Lumen Studio",
     format: "sample",
+    coverIndex: 0,
     description: "A short narrative sample for building the base reader.",
     sections: [
       {
