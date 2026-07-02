@@ -4,7 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fb0c8d41-9a7c-4922-86e7-f111d9ad1dce" name="更改" comment="Add sidebar illustration and update styles for improved reading experience" />
+    <list default="true" id="fb0c8d41-9a7c-4922-86e7-f111d9ad1dce" name="更改" comment="Refine scrolling behavior in App component for better navigation">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -71,7 +74,7 @@
       <option name="presentableId" value="Default" />
       <updated>1782370350666</updated>
       <workItem from="1782370352042" duration="1629000" />
-      <workItem from="1782961797975" duration="6034000" />
+      <workItem from="1782961797975" duration="8387000" />
     </task>
     <task id="LOCAL-00001" summary="Add sidebar illustration and update styles for improved reading experience">
       <option name="closed" value="true" />
@@ -89,7 +92,15 @@
       <option name="project" value="LOCAL" />
       <updated>1782964805166</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Refine scrolling behavior in App component for better navigation">
+      <option name="closed" value="true" />
+      <created>1782977365554</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1782977365554</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -98,7 +109,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Refine Lumen reader experience" />
     <MESSAGE value="Add sidebar illustration and update styles for improved reading experience" />
-    <option name="LAST_COMMIT_MESSAGE" value="Add sidebar illustration and update styles for improved reading experience" />
+    <MESSAGE value="Refine scrolling behavior in App component for better navigation" />
+    <option name="LAST_COMMIT_MESSAGE" value="Refine scrolling behavior in App component for better navigation" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>
