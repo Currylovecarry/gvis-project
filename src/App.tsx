@@ -690,8 +690,13 @@ function ReaderView({
       const target = stage.querySelector<HTMLElement>(selector);
       if (!target) return;
 
-      const top = target.offsetTop - 18;
-      stage.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+      let offsetTop = 0;
+      let element: HTMLElement | null = target;
+      while (element && element !== stage) {
+        offsetTop += element.offsetTop;
+        element = element.offsetParent as HTMLElement | null;
+      }
+      stage.scrollTo({ top: Math.max(offsetTop - 20, 0), behavior: "smooth" });
       setTocOpen(false);
     },
     [isPagedTextMode],

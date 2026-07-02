@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fb0c8d41-9a7c-4922-86e7-f111d9ad1dce" name="更改" comment="Add sidebar illustration and update styles for improved reading experience">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/data/books.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/books.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/styles.css" afterDir="false" />
-    </list>
+    <list default="true" id="fb0c8d41-9a7c-4922-86e7-f111d9ad1dce" name="更改" comment="Add sidebar illustration and update styles for improved reading experience" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -77,7 +71,7 @@
       <option name="presentableId" value="Default" />
       <updated>1782370350666</updated>
       <workItem from="1782370352042" duration="1629000" />
-      <workItem from="1782961797975" duration="5489000" />
+      <workItem from="1782961797975" duration="6034000" />
     </task>
     <task id="LOCAL-00001" summary="Add sidebar illustration and update styles for improved reading experience">
       <option name="closed" value="true" />
