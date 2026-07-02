@@ -54,6 +54,14 @@ type PagedDocumentPage = {
   items: PagedSection[];
 };
 
+type TocItem = {
+  id: string;
+  label: string;
+  meta: string;
+  pageNumber?: number;
+  pageIndex?: number;
+};
+
 const progressKey = "gvis-reader-progress";
 const settingsKey = "gvis-reader-settings";
 
@@ -129,6 +137,10 @@ function paginateSections(
     let currentItem: PagedSection | null = null;
     let itemChars = 0;
     const headingCost = (section.heading?.length ?? 0) + (section.label?.length ?? 0) + 80;
+
+    if (currentPage.items.length > 0) {
+      pushPage();
+    }
 
     const pushItem = () => {
       if (!currentItem || !currentItem.paragraphs.length) return;
@@ -400,6 +412,27 @@ function LibraryView({
 
   return (
     <div className="library-layout">
+      <header className="mobile-header">
+        <strong className="brand-title">
+          <img className="brand-emblem" src="/site-icon.png" alt="" aria-hidden="true" />
+          <span>Lumen · </span>
+          <span className="brand-title-cn">微光</span>
+        </strong>
+        <label className="import-button" htmlFor={fileInputId} aria-label="导入图书">
+          <Upload size={18} strokeWidth={2.2} />
+        </label>
+      </header>
+
+      <div className="mobile-search">
+        <Search size={16} strokeWidth={2.2} />
+        <input
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="搜索书名或作者"
+          type="search"
+        />
+      </div>
+
       <aside className="library-sidebar" aria-label="书库导航">
         <div className="brand-block">
           <div>
@@ -580,14 +613,15 @@ function ReaderView({
 }: ReaderViewProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
+  const tocItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const progressRef = useRef(progress);
   const restoringRef = useRef(true);
-  const lastScrollTopRef = useRef(0);
   const [tocOpen, setTocOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pagesOpen, setPagesOpen] = useState(false);
-  const [readerMode, setReaderMode] = useState<ReaderMode>("scroll");
+  const [readerMode, setReaderMode] = useState<ReaderMode>("paged");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [topbarHidden, setTopbarHidden] = useState(false);
+  const [activeTocItemId, setActiveTocItemId] = useState("");
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = readerMode === "paged" && !isPdf;
@@ -599,7 +633,7 @@ function ReaderView({
     () => paginateSections(book.sections, settings),
     [book.sections, settings],
   );
-  const tocItems = useMemo(() => {
+  const tocItems = useMemo<TocItem[]>(() => {
     if (isPdf) {
       return Array.from({ length: book.pdf?.pageCount ?? 0 }, (_, index) => ({
         id: `page-${index + 1}`,
@@ -616,6 +650,42 @@ function ReaderView({
       pageIndex: firstPageIndexBySection[section.id],
     }));
   }, [book.pdf?.pageCount, book.sections, firstPageIndexBySection, isPdf]);
+  const activeTocItem = tocItems.find((item) => item.id === activeTocItemId) ?? null;
+
+  useEffect(() => {
+    progressRef.current = progress;
+  }, [progress]);
+
+  const syncActiveTocItem = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage || isPagedTextMode) return;
+
+    const nodes = Array.from(
+      stage.querySelectorAll<HTMLElement>(isPdf ? "[data-page-number]" : "[data-section-id]"),
+    );
+    if (nodes.length === 0) return;
+
+    const anchorY = stage.getBoundingClientRect().top + Math.min(stage.clientHeight * 0.28, 180);
+    let nextActiveId =
+      (isPdf ? nodes[0]?.dataset.pageNumber && `page-${nodes[0].dataset.pageNumber}` : nodes[0]?.dataset.sectionId) ??
+      "";
+
+    for (const node of nodes) {
+      const rect = node.getBoundingClientRect();
+      const candidateId =
+        isPdf ? node.dataset.pageNumber && `page-${node.dataset.pageNumber}` : node.dataset.sectionId;
+      if (!candidateId) continue;
+      if (rect.top <= anchorY) {
+        nextActiveId = candidateId;
+        continue;
+      }
+      break;
+    }
+
+    if (nextActiveId) {
+      setActiveTocItemId((current) => (current === nextActiveId ? current : nextActiveId));
+    }
+  }, [isPagedTextMode, isPdf]);
 
   const saveCurrentProgress = useCallback(() => {
     const stage = stageRef.current;
@@ -638,26 +708,13 @@ function ReaderView({
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(() => {
       const stage = stageRef.current;
-      if (stage && !tocOpen && !settingsOpen && !pagesOpen) {
-        if (!isPagedTextMode) {
-          const currentTop = stage.scrollTop;
-          const lastTop = lastScrollTopRef.current;
-
-          if (currentTop > 88 && currentTop - lastTop > 10) {
-            setTopbarHidden(true);
-          } else if (currentTop < 36 || lastTop - currentTop > 10) {
-            setTopbarHidden(false);
-          }
-
-          lastScrollTopRef.current = currentTop;
-        } else {
-          setTopbarHidden(false);
-        }
+      if (stage) {
+        syncActiveTocItem();
       }
       saveCurrentProgress();
       frameRef.current = null;
     });
-  }, [isPagedTextMode, pagesOpen, saveCurrentProgress, settingsOpen, tocOpen]);
+  }, [saveCurrentProgress, syncActiveTocItem]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
     if (isPagedTextMode) {
@@ -673,7 +730,7 @@ function ReaderView({
   }, [isPagedTextMode, pagedPages.length]);
 
   const jumpToTocItem = useCallback(
-    (item: { id: string; pageNumber?: number; pageIndex?: number }) => {
+    (item: TocItem) => {
       const stage = stageRef.current;
       if (isPagedTextMode && item.pageIndex !== undefined) {
         setCurrentPageIndex(item.pageIndex);
@@ -686,17 +743,19 @@ function ReaderView({
       const selector =
         item.pageNumber !== undefined
           ? `[data-page-number="${item.pageNumber}"]`
-          : `[data-section-id="${item.id}"]`;
+          : `[data-toc-anchor-for="${item.id}"], [data-section-id="${item.id}"]`;
       const target = stage.querySelector<HTMLElement>(selector);
       if (!target) return;
 
-      let offsetTop = 0;
-      let element: HTMLElement | null = target;
-      while (element && element !== stage) {
-        offsetTop += element.offsetTop;
-        element = element.offsetParent as HTMLElement | null;
-      }
-      stage.scrollTo({ top: Math.max(offsetTop - 20, 0), behavior: "smooth" });
+      const stageRect = stage.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const scrollTop = stage.scrollTop;
+      const relativeTop = targetRect.top - stageRect.top + scrollTop;
+
+      stage.scrollTo({
+        top: Math.max(relativeTop, 0),
+        behavior: "auto",
+      });
       setTocOpen(false);
     },
     [isPagedTextMode],
@@ -705,37 +764,40 @@ function ReaderView({
   useEffect(() => {
     restoringRef.current = true;
     const animationFrame = window.requestAnimationFrame(() => {
+      const currentProgress = progressRef.current;
       if (isPagedTextMode) {
-        const nextPageIndex = pagedPages.length <= 1 ? 0 : Math.round(progress * (pagedPages.length - 1));
+        const nextPageIndex = pagedPages.length <= 1 ? 0 : Math.round(currentProgress * (pagedPages.length - 1));
         setCurrentPageIndex(clamp(nextPageIndex, 0, Math.max(pagedPages.length - 1, 0)));
-        lastScrollTopRef.current = 0;
       } else {
         const stage = stageRef.current;
-        if (!stage) return;
+        if (!stage) {
+          restoringRef.current = false;
+          return;
+        }
         const maxScroll = stage.scrollHeight - stage.clientHeight;
-        stage.scrollTop = maxScroll > 0 ? maxScroll * progress : 0;
-        lastScrollTopRef.current = stage.scrollTop;
+        stage.scrollTop = maxScroll > 0 ? maxScroll * currentProgress : 0;
       }
-      setTopbarHidden(false);
       restoringRef.current = false;
     });
 
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [book.id, isPagedTextMode, pagedPages.length, progress]);
-
-  useEffect(() => {
-    if (tocOpen || settingsOpen || pagesOpen) {
-      setTopbarHidden(false);
-    }
-  }, [pagesOpen, settingsOpen, tocOpen]);
+  }, [book.id, isPagedTextMode, pagedPages.length]);
 
   useEffect(() => {
     if (!isPagedTextMode) return;
     const stage = stageRef.current;
     if (!stage) return;
     stage.scrollTo({ top: 0, behavior: "auto" });
-    lastScrollTopRef.current = 0;
   }, [currentPageIndex, isPagedTextMode]);
+
+  useEffect(() => {
+    if (!isPagedTextMode) return;
+    const nextActiveId =
+      [...tocItems].reverse().find((item) => item.pageIndex !== undefined && item.pageIndex <= currentPageIndex)?.id ??
+      tocItems[0]?.id ??
+      "";
+    setActiveTocItemId((current) => (current === nextActiveId ? current : nextActiveId));
+  }, [currentPageIndex, isPagedTextMode, tocItems]);
 
   useEffect(() => {
     if (!isPagedTextMode || restoringRef.current) return;
@@ -778,6 +840,19 @@ function ReaderView({
     };
   }, []);
 
+  useEffect(() => {
+    if (isPagedTextMode) return;
+    const animationFrame = window.requestAnimationFrame(syncActiveTocItem);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [book.id, isPagedTextMode, progress, readerMode, settings.fontScale, settings.lineHeight, syncActiveTocItem]);
+
+  useEffect(() => {
+    if (!tocOpen || !activeTocItemId) return;
+    const activeItem = tocItemRefs.current[activeTocItemId];
+    if (!activeItem) return;
+    activeItem.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeTocItemId, tocOpen]);
+
   const setFontScale = (delta: number) => {
     onSettingsChange({
       ...settings,
@@ -795,7 +870,7 @@ function ReaderView({
 
   return (
     <section
-      className={`reader-screen theme-${settings.theme}${topbarHidden ? " topbar-hidden" : ""}`}
+      className={`reader-screen theme-${settings.theme}`}
       aria-label={`${book.title} 阅读器`}
     >
       <header className="reader-topbar">
@@ -825,14 +900,21 @@ function ReaderView({
             </button>
             {tocOpen && (
               <div className="toc-popover">
-                <div className="toc-header">目录</div>
+                <div className="toc-header">
+                  <span>目录</span>
+                  {activeTocItem && <strong>{activeTocItem.label}</strong>}
+                </div>
                 <div className="toc-list">
                   {tocItems.map((item) => (
                     <button
-                      className="toc-item"
+                      className={`toc-item${item.id === activeTocItemId ? " active" : ""}`}
                       key={item.id}
                       type="button"
+                      ref={(node) => {
+                        tocItemRefs.current[item.id] = node;
+                      }}
                       onClick={() => jumpToTocItem(item)}
+                      aria-current={item.id === activeTocItemId ? "location" : undefined}
                     >
                       <span>{item.label}</span>
                       <strong>{item.meta}</strong>
@@ -1021,7 +1103,7 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
       {book.sections.map((section, sectionIndex) => (
         <section className="reader-section" data-section-id={section.id} key={section.id}>
           {(section.label || section.heading) && (
-            <header className="section-header">
+            <header className="section-header" data-toc-anchor-for={section.id}>
               {section.label && <span>{section.label}</span>}
               {section.heading && <h2>{section.heading}</h2>}
             </header>
