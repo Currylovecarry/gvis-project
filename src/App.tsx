@@ -27,7 +27,7 @@ import { Book, BookFormat, books, getBookTextStats } from "./data/books";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
 
-type View = "welcome" | "library" | "reader";
+type View = "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
 
 type ReaderSettings = {
@@ -86,7 +86,7 @@ function formatLabel(format: BookFormat) {
 }
 
 function App() {
-  const [view, setView] = useState<View>("welcome");
+  const [view, setView] = useState<View>("library");
   const [query, setQuery] = useState("");
   const [libraryBooks, setLibraryBooks] = useState<Book[]>(books);
   const [activeBook, setActiveBook] = useState<Book>(books[0]);
@@ -204,9 +204,7 @@ function App() {
 
   return (
     <main className="app-shell">
-      {view === "welcome" ? (
-        <WelcomeView onStart={() => setView("library")} />
-      ) : view === "library" ? (
+      {view === "library" ? (
         <LibraryView
           books={filteredBooks}
           query={query}
@@ -229,30 +227,6 @@ function App() {
         />
       )}
     </main>
-  );
-}
-
-function WelcomeView({ onStart }: { onStart: () => void }) {
-  return (
-    <section className="welcome-screen" aria-label="欢迎界面">
-      <div className="welcome-dust welcome-dust-left" aria-hidden="true" />
-      <div className="welcome-dust welcome-dust-right" aria-hidden="true" />
-
-      <div className="welcome-card">
-        <span className="welcome-tag">Pause for a softer read</span>
-        <h1 className="welcome-title">
-          <span>Lumen · </span>
-          <span className="welcome-title-cn">微光</span>
-        </h1>
-        <p className="welcome-subtitle">A little light, just when you need it.</p>
-
-        <div className="welcome-start-wrap">
-          <button className="welcome-start-button" type="button" onClick={onStart}>
-            start
-          </button>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -294,7 +268,10 @@ function LibraryView({
         <div className="brand-block">
           <div className="brand-mark">L</div>
           <div>
-            <strong>Lumen · 微光</strong>
+            <strong className="brand-title">
+              <span>Lumen · </span>
+              <span className="brand-title-cn">微光</span>
+            </strong>
             <span>A little light, just when you need it.</span>
           </div>
         </div>
@@ -661,6 +638,10 @@ function ReaderView({
         </div>
 
         <div className="reader-title">
+          <div className="reader-brand" aria-hidden="true">
+            <span>Lumen · </span>
+            <span className="reader-brand-cn">微光</span>
+          </div>
           <strong>{book.title}</strong>
         </div>
 
