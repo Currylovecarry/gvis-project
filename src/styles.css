@@ -273,6 +273,22 @@ button {
   gap: 8px;
 }
 
+.sidebar-reading-illustration {
+  margin-top: auto;
+  padding: 10px 0 2px;
+}
+
+.sidebar-reading-illustration img {
+  display: block;
+  width: calc(100% + 28px);
+  max-width: 268px;
+  height: auto;
+  margin-left: -16px;
+  opacity: 0.92;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -1190,6 +1206,12 @@ button {
 
   .book-grid {
     grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  }
+
+  .sidebar-reading-illustration img {
+    width: 142%;
+    max-width: none;
+    margin-left: -20px;
   }
 }
 

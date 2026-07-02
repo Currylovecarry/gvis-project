@@ -22,6 +22,7 @@ import {
   useRef,
   useState,
 } from "react";
+import booksCoffeeHanddrawn from "./assets/books_coffee_handdrawn.svg";
 import { Book, BookFormat, books, getBookTextStats } from "./data/books";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
@@ -318,6 +319,10 @@ function LibraryView({
             <span>继续阅读</span>
           </button>
         </nav>
+
+        <div className="sidebar-reading-illustration" aria-hidden="true">
+          <img src={booksCoffeeHanddrawn} alt="" />
+        </div>
       </aside>
 
       <section className="library-main" aria-label="书库">
