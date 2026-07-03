@@ -1,6 +1,8 @@
 import {
   ArrowLeft,
   BookOpen,
+  BrainCircuit,
+  CircleOff,
   FileText,
   Library,
   List,
@@ -8,10 +10,12 @@ import {
   Moon,
   Plus,
   Search,
+  Sparkles,
   Sun,
   Trash2,
   Type,
   Upload,
+  WandSparkles,
 } from "lucide-react";
 import {
   CSSProperties,
@@ -35,6 +39,7 @@ import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pd
 type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
 type ReaderMode = "scroll" | "paged";
+type AiMode = "zero" | "low" | "medium" | "high";
 
 type ReaderSettings = {
   fontScale: number;
@@ -399,7 +404,6 @@ function WelcomeView({ onEnter }: WelcomeViewProps) {
         <img className="journal-sticker sticker-1358" src="/start/IMG_1358.jpg" alt="" />
         <img className="journal-sticker sticker-1359" src="/start/IMG_1359.jpg" alt="" />
         <img className="journal-sticker sticker-1360" src="/start/IMG_1360.jpg" alt="" />
-        <img className="journal-sticker sticker-1361" src="/start/IMG_1361.jpg" alt="" />
         <img className="journal-sticker sticker-1362" src="/start/IMG_1362.jpg" alt="" />
         <img className="journal-sticker sticker-1363" src="/start/IMG_1363.jpg" alt="" />
         <img className="journal-sticker sticker-1364" src="/start/IMG_1364.jpg" alt="" />
@@ -551,7 +555,6 @@ function LibraryView({
               <BookTile
                 book={book}
                 key={book.id}
-                progress={progressByBook[book.id] ?? 0}
                 canDelete={!books.some((sampleBook) => sampleBook.id === book.id)}
                 onOpenBook={onOpenBook}
                 onDeleteBook={onDeleteBook}
@@ -576,13 +579,12 @@ function LibraryView({
 
 type BookTileProps = {
   book: Book;
-  progress: number;
   canDelete: boolean;
   onOpenBook: (book: Book) => void;
   onDeleteBook: (book: Book) => void;
 };
 
-function BookTile({ book, progress, canDelete, onOpenBook, onDeleteBook }: BookTileProps) {
+function BookTile({ book, canDelete, onOpenBook, onDeleteBook }: BookTileProps) {
   return (
     <article className="book-card">
       <button
@@ -596,15 +598,6 @@ function BookTile({ book, progress, canDelete, onOpenBook, onDeleteBook }: BookT
           <div>
             <strong>{book.title}</strong>
             <span>{book.author}</span>
-          </div>
-          <div className="book-progress-block">
-            <div className="book-progress-meta" aria-hidden="true">
-              <span>阅读进度</span>
-              <span>{formatPercent(progress)}</span>
-            </div>
-            <div className="book-progress" aria-label={`阅读进度 ${formatPercent(progress)}`}>
-              <span style={{ width: formatPercent(progress) }} />
-            </div>
           </div>
         </div>
       </button>
@@ -659,6 +652,8 @@ function ReaderView({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pagesOpen, setPagesOpen] = useState(false);
   const [readerMode, setReaderMode] = useState<ReaderMode>("paged");
+  const [modeOpen, setModeOpen] = useState(false);
+  const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [activeTocItemId, setActiveTocItemId] = useState("");
   const stats = useMemo(() => getBookTextStats(book), [book]);
@@ -931,6 +926,7 @@ function ReaderView({
                 setTocOpen((open) => !open);
                 setSettingsOpen(false);
                 setPagesOpen(false);
+                setModeOpen(false);
               }}
               aria-label="打开目录"
               title="目录"
@@ -970,6 +966,7 @@ function ReaderView({
               setPagesOpen((open) => !open);
               setTocOpen(false);
               setSettingsOpen(false);
+              setModeOpen(false);
             }}
             aria-label="Pages"
             title="Pages"
@@ -1006,6 +1003,76 @@ function ReaderView({
               </button>
             </div>
           )}
+          <button
+            className={`icon-button reader-nav-button reader-nav-mode${modeOpen ? " active" : ""}`}
+            type="button"
+            onClick={() => {
+              setModeOpen((open) => !open);
+              setTocOpen(false);
+              setPagesOpen(false);
+              setSettingsOpen(false);
+            }}
+            aria-label="Mode"
+            title="Mode"
+          >
+            <Sparkles size={20} strokeWidth={2.2} />
+          </button>
+          {modeOpen && (
+            <div className="reader-ai-panel">
+              <button
+                className={`reader-mode-button${aiMode === "zero" ? " active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setAiMode("zero");
+                  setModeOpen(false);
+                }}
+                aria-label="Zero AI mode"
+                title="Zero"
+              >
+                <CircleOff size={16} strokeWidth={2.2} />
+                <span>zero</span>
+              </button>
+              <button
+                className={`reader-mode-button${aiMode === "low" ? " active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setAiMode("low");
+                  setModeOpen(false);
+                }}
+                aria-label="Low AI mode"
+                title="Low"
+              >
+                <Sparkles size={16} strokeWidth={2.2} />
+                <span>low</span>
+              </button>
+              <button
+                className={`reader-mode-button${aiMode === "medium" ? " active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setAiMode("medium");
+                  setModeOpen(false);
+                }}
+                aria-label="Medium AI mode"
+                title="Medium"
+              >
+                <WandSparkles size={16} strokeWidth={2.2} />
+                <span>medium</span>
+              </button>
+              <button
+                className={`reader-mode-button${aiMode === "high" ? " active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setAiMode("high");
+                  setModeOpen(false);
+                }}
+                aria-label="High AI mode"
+                title="High"
+              >
+                <BrainCircuit size={16} strokeWidth={2.2} />
+                <span>high</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="reader-title">
@@ -1024,6 +1091,7 @@ function ReaderView({
               setSettingsOpen((open) => !open);
               setTocOpen(false);
               setPagesOpen(false);
+              setModeOpen(false);
             }}
             aria-label="打开排版设置"
             title="排版设置"

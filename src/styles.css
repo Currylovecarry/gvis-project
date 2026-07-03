@@ -147,14 +147,6 @@ button {
   transform: rotate(-4deg);
 }
 
-.sticker-1361 {
-  right: 18%;
-  top: 72vh;
-  width: clamp(78px, 9vw, 136px);
-  opacity: 0.44;
-  transform: rotate(8deg);
-}
-
 .sticker-1362 {
   left: 38%;
   bottom: 4vh;
@@ -750,45 +742,6 @@ button {
   white-space: nowrap;
 }
 
-.book-progress-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  margin-top: 2px;
-}
-
-.book-progress-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--reader-muted);
-  font-family: var(--reader-hand);
-  font-size: 12px;
-  line-height: 1;
-}
-
-.book-progress-meta span {
-  min-width: 0;
-}
-
-.book-progress {
-  width: 100%;
-  height: 3px;
-  overflow: hidden;
-  background: rgba(31, 30, 26, 0.08);
-  border-radius: 999px;
-  isolation: isolate;
-}
-
-.book-progress span {
-  display: block;
-  height: 100%;
-  background: var(--reader-accent);
-  border-radius: inherit;
-}
-
 .empty-state {
   display: grid;
   flex: 1 1 auto;
@@ -992,14 +945,19 @@ button {
 }
 
 .reader-nav-notes::after {
-  content: "notes";
+  content: "toc";
 }
 
 .reader-nav-pages::after {
   content: "pages";
 }
 
-.reader-nav-pages.active::before {
+.reader-nav-mode::after {
+  content: "mode";
+}
+
+.reader-nav-pages.active::before,
+.reader-nav-mode.active::before {
   position: absolute;
   right: -4px;
   bottom: -8px;
@@ -1040,6 +998,14 @@ button {
 }
 
 .reader-pages-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -6px;
+  padding: 4px 0 0 10px;
+}
+
+.reader-ai-panel {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1098,6 +1064,8 @@ button {
   top: 30px;
   left: 0;
   z-index: 24;
+  display: flex;
+  flex-direction: column;
   width: min(238px, calc(100vw - 32px));
   max-height: min(56vh, 480px);
   overflow: hidden;
@@ -1109,7 +1077,9 @@ button {
 }
 
 .toc-header {
-  display: grid;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
   gap: 4px;
   padding: 12px 14px 8px;
   color: var(--reader-muted);
@@ -1118,20 +1088,27 @@ button {
   font-size: 16px;
 }
 
+.toc-header span {
+  line-height: 1.1;
+}
+
 .toc-header strong {
+  display: block;
   overflow: hidden;
   color: var(--reader-ink);
   font-family: var(--reader-copy);
   font-size: 14px;
   font-weight: 400;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .toc-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  max-height: calc(min(56vh, 480px) - 42px);
+  min-height: 0;
   padding: 8px 10px 10px;
   overflow-y: auto;
 }
@@ -1397,7 +1374,7 @@ button {
   justify-content: flex-start;
   gap: 16px;
   margin-top: 34px;
-  padding: 18px 0 6px;
+  padding: 40px 0 6px;
   color: var(--reader-muted);
   border-top: 1px solid rgba(31, 30, 26, 0.08);
   font-family: var(--reader-hand);
@@ -1601,7 +1578,7 @@ button {
 }
 
 .reader-copy p {
-  margin: 0 0 30px;
+  margin: 0 0 18px;
   overflow-wrap: anywhere;
 }
 
@@ -1718,7 +1695,6 @@ button {
   .sticker-1355,
   .sticker-1356,
   .sticker-1358,
-  .sticker-1361,
   .sticker-1362,
   .sticker-1365,
   .note-soft {
@@ -1872,14 +1848,6 @@ button {
 
   .book-tile-body > span {
     font-size: 12px;
-  }
-
-  .book-progress-block {
-    margin-top: 6px;
-  }
-
-  .book-progress-meta {
-    font-size: 11px;
   }
 
   .reader-screen::before,
