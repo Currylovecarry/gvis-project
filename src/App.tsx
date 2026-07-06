@@ -32,9 +32,21 @@ import logo1 from "./assets/logos/72084966-334c-451a-81b9-b37c9220db74-178297493
 import logo3 from "./assets/logos/31b1e46e-0fe1-4702-936a-bdd805edd20f-1782974934894_IMG_1349.svg";
 import logo4 from "./assets/logos/bc34797c-7ded-48bc-87cc-cfcbfe5e204f-1782974934894_IMG_1348.svg";
 import logo5 from "./assets/logos/21ce9ae5-90df-4728-9433-34dee7d13417-1782975463348_Oe_2026-07-02_14.55.33.svg";
-import { Book, BookFormat, books, getBookTextStats } from "./data/books";
+import {
+  parseNarrativeUnits,
+  parseText,
+  type NarrativeUnitsResponse,
+  type ParseResponse,
+} from "./api/narrativeApi";
+import { Book, BookFormat, books } from "./data/books";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
+import {
+  buildReadingScopeIndex,
+  getCurrentStoryTextUntilPage,
+  type CurrentStoryScope,
+  type ReadingScopeIndex,
+} from "./utils/readingScope";
 
 type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
@@ -52,6 +64,7 @@ type PagedSection = {
   label?: string;
   heading?: string;
   paragraphs: string[];
+  startParagraphIndex: number;
 };
 
 type PagedDocumentPage = {
@@ -176,6 +189,7 @@ function paginateSections(
           label: paragraphIndex === 0 ? section.label : undefined,
           heading: paragraphIndex === 0 ? section.heading : undefined,
           paragraphs: [],
+          startParagraphIndex: paragraphIndex,
         };
         itemChars += headingCost;
       }
@@ -656,13 +670,24 @@ function ReaderView({
   const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [activeTocItemId, setActiveTocItemId] = useState("");
-  const stats = useMemo(() => getBookTextStats(book), [book]);
+  const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
+  const [parseScope, setParseScope] = useState<CurrentStoryScope | null>(null);
+  const [parseError, setParseError] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+  const [narrativeUnitsResult, setNarrativeUnitsResult] =
+    useState<NarrativeUnitsResponse | null>(null);
+  const [narrativeUnitsError, setNarrativeUnitsError] = useState("");
+  const [isParsingNarrativeUnits, setIsParsingNarrativeUnits] = useState(false);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = readerMode === "paged" && !isPdf;
   const documentStyle = {
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
   } as CSSProperties;
+  const readingScopeIndex = useMemo<ReadingScopeIndex>(
+    () => buildReadingScopeIndex(book.sections),
+    [book.sections],
+  );
   const { pages: pagedPages, firstPageIndexBySection } = useMemo(
     () => paginateSections(book.sections, settings),
     [book.sections, settings],
@@ -685,6 +710,132 @@ function ReaderView({
     }));
   }, [book.pdf?.pageCount, book.sections, firstPageIndexBySection, isPdf]);
   const activeTocItem = tocItems.find((item) => item.id === activeTocItemId) ?? null;
+  const paragraphRangeByKey = useMemo(
+    () =>
+      new Map(
+        readingScopeIndex.paragraphs.map((paragraph) => [
+          `${paragraph.sectionId}:${paragraph.paragraphIndex}`,
+          paragraph,
+        ]),
+      ),
+    [readingScopeIndex.paragraphs],
+  );
+
+  const getPagedPageEndIndex = useCallback(() => {
+    const page = pagedPages[currentPageIndex];
+    const lastItem = page?.items[page.items.length - 1];
+    if (!lastItem) return 0;
+
+    const lastParagraphIndex =
+      lastItem.startParagraphIndex + Math.max(lastItem.paragraphs.length - 1, 0);
+    const paragraphRange = paragraphRangeByKey.get(`${lastItem.sectionId}:${lastParagraphIndex}`);
+
+    return paragraphRange?.endIndex ?? 0;
+  }, [currentPageIndex, pagedPages, paragraphRangeByKey]);
+
+  const getScrollPageEndIndex = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return 0;
+
+    const stageRect = stage.getBoundingClientRect();
+    const viewportBottom = stageRect.bottom;
+    const paragraphNodes = Array.from(
+      stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"),
+    );
+
+    let lastVisibleEndIndex = 0;
+    for (const node of paragraphNodes) {
+      const rect = node.getBoundingClientRect();
+      if (rect.top > viewportBottom) break;
+      if (rect.bottom < stageRect.top) continue;
+
+      const sectionId = node.dataset.sectionId;
+      const paragraphIndex = Number(node.dataset.paragraphIndex);
+      if (!sectionId || !Number.isFinite(paragraphIndex)) continue;
+
+      const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
+      if (paragraphRange) {
+        lastVisibleEndIndex = paragraphRange.endIndex;
+      }
+    }
+
+    return lastVisibleEndIndex || readingScopeIndex.paragraphs[0]?.endIndex || 0;
+  }, [paragraphRangeByKey, readingScopeIndex.paragraphs]);
+
+  const getCurrentPageEndIndex = useCallback(() => {
+    if (isPdf) return 0;
+    return isPagedTextMode ? getPagedPageEndIndex() : getScrollPageEndIndex();
+  }, [getPagedPageEndIndex, getScrollPageEndIndex, isPagedTextMode, isPdf]);
+
+  const getCurrentStoryScope = useCallback(() => {
+    const currentPageEndIndex = getCurrentPageEndIndex();
+    return getCurrentStoryTextUntilPage(
+      readingScopeIndex.fullText,
+      currentPageEndIndex,
+      readingScopeIndex.chapters,
+    );
+  }, [getCurrentPageEndIndex, readingScopeIndex.chapters, readingScopeIndex.fullText]);
+
+  const handleParseCurrentStory = useCallback(async () => {
+    const scope = getCurrentStoryScope();
+    setParseScope(scope);
+    setParseResult(null);
+
+    if (!scope.text.trim()) {
+      setParseError("No text available to parse.");
+      return;
+    }
+
+    setIsParsing(true);
+    setParseError("");
+
+    try {
+      const result = await parseText(scope.text);
+      setParseResult(result);
+    } catch {
+      setParseError("HanLP parsing failed or backend is not running.");
+    } finally {
+      setIsParsing(false);
+    }
+  }, [getCurrentStoryScope]);
+
+  const handleParseNarrativeUnits = useCallback(async () => {
+    const scope = getCurrentStoryScope();
+    setParseScope(scope);
+    setNarrativeUnitsResult(null);
+
+    if (!scope.text.trim()) {
+      setNarrativeUnitsError("No text available to parse.");
+      return;
+    }
+
+    setIsParsingNarrativeUnits(true);
+    setNarrativeUnitsError("");
+
+    try {
+      const result = await parseNarrativeUnits({
+        text: scope.text,
+        story_title: scope.title,
+        startIndex: scope.startIndex,
+        endIndex: scope.endIndex,
+      });
+      setNarrativeUnitsResult(result);
+    } catch {
+      setNarrativeUnitsError("Narrative units parsing failed or backend is not running.");
+    } finally {
+      setIsParsingNarrativeUnits(false);
+    }
+  }, [getCurrentStoryScope]);
+
+  useEffect(() => {
+    setParseResult(null);
+    setParseScope(null);
+    setParseError("");
+    setIsParsing(false);
+    setNarrativeUnitsResult(null);
+    setNarrativeUnitsError("");
+    setIsParsingNarrativeUnits(false);
+  }, [book.id]);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -1073,6 +1224,38 @@ function ReaderView({
               </button>
             </div>
           )}
+          <button
+            className="icon-button reader-nav-button reader-nav-parse"
+            type="button"
+            onClick={() => {
+              setTocOpen(false);
+              setPagesOpen(false);
+              setSettingsOpen(false);
+              setModeOpen(false);
+              void handleParseCurrentStory();
+            }}
+            disabled={isParsing}
+            aria-label="解析当前故事文本"
+            title="解析文本"
+          >
+            <BrainCircuit size={20} strokeWidth={2.2} />
+          </button>
+          <button
+            className="icon-button reader-nav-button reader-nav-units"
+            type="button"
+            onClick={() => {
+              setTocOpen(false);
+              setPagesOpen(false);
+              setSettingsOpen(false);
+              setModeOpen(false);
+              void handleParseNarrativeUnits();
+            }}
+            disabled={isParsingNarrativeUnits}
+            aria-label="生成句子级中间数据"
+            title="Parse Narrative Units"
+          >
+            <FileText size={20} strokeWidth={2.2} />
+          </button>
         </div>
 
         <div className="reader-title">
@@ -1187,8 +1370,325 @@ function ReaderView({
         ) : (
           <TextDocumentView book={book} documentStyle={documentStyle} />
         )}
+        {(parseScope ||
+          parseResult ||
+          parseError ||
+          isParsing ||
+          narrativeUnitsResult ||
+          narrativeUnitsError ||
+          isParsingNarrativeUnits) && (
+          <HanlpDebugPanel
+            error={parseError}
+            isLoading={isParsing}
+            narrativeUnitsError={narrativeUnitsError}
+            narrativeUnitsIsLoading={isParsingNarrativeUnits}
+            narrativeUnitsResult={narrativeUnitsResult}
+            result={parseResult}
+            scope={parseScope}
+          />
+        )}
       </div>
 
+    </section>
+  );
+}
+
+type HanlpDebugPanelProps = {
+  error: string;
+  isLoading: boolean;
+  narrativeUnitsError: string;
+  narrativeUnitsIsLoading: boolean;
+  narrativeUnitsResult: NarrativeUnitsResponse | null;
+  result: ParseResponse | null;
+  scope: CurrentStoryScope | null;
+};
+
+function HanlpDebugPanel({
+  error,
+  isLoading,
+  narrativeUnitsError,
+  narrativeUnitsIsLoading,
+  narrativeUnitsResult,
+  result,
+  scope,
+}: HanlpDebugPanelProps) {
+  const preview = scope?.text.slice(0, 300) ?? "";
+
+  return (
+    <aside className="hanlp-debug-panel" aria-label="HanLP Debug Panel">
+      <header className="hanlp-debug-header">
+        <div>
+          <span>HanLP Debug</span>
+          <strong>{scope?.title || "Current Story"}</strong>
+        </div>
+        {isLoading && <em>Parsing...</em>}
+      </header>
+
+      <section className="hanlp-debug-section">
+        <h3>Current Story Title</h3>
+        <p>{scope?.title || "N/A"}</p>
+      </section>
+
+      <section className="hanlp-debug-grid" aria-label="Parse range">
+        <div>
+          <span>startIndex</span>
+          <strong>{scope?.startIndex ?? "N/A"}</strong>
+        </div>
+        <div>
+          <span>endIndex</span>
+          <strong>{scope?.endIndex ?? "N/A"}</strong>
+        </div>
+        <div>
+          <span>Parse Text Length</span>
+          <strong>{scope?.text.length ?? 0}</strong>
+        </div>
+      </section>
+
+      <section className="hanlp-debug-section">
+        <h3>Parse Text Preview</h3>
+        <details open>
+          <summary>Preview</summary>
+          <p>{preview}{scope && scope.text.length > 300 ? "..." : ""}</p>
+        </details>
+      </section>
+
+      {error && <div className="hanlp-debug-error">{error}</div>}
+
+      <section className="hanlp-debug-section">
+        <h3>Tokens</h3>
+        <div className="hanlp-token-list">
+          {result?.tokens.length ? (
+            result.tokens.map((token, index) => <span key={`${token}-${index}`}>{token}</span>)
+          ) : (
+            <p>No tokens yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="hanlp-debug-section">
+        <h3>Entities</h3>
+        <div className="hanlp-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>text</th>
+                <th>type</th>
+                <th>start</th>
+                <th>end</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result?.entities.length ? (
+                result.entities.map((entity, index) => (
+                  <tr key={`${entity.text}-${entity.type}-${index}`}>
+                    <td>{entity.text}</td>
+                    <td>{entity.type}</td>
+                    <td>{entity.start ?? "N/A"}</td>
+                    <td>{entity.end ?? "N/A"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4}>No entities yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="hanlp-debug-section">
+        <h3>POS</h3>
+        <div className="hanlp-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>token</th>
+                <th>tag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result?.pos.length ? (
+                result.pos.map(([token, tag], index) => (
+                  <tr key={`${token}-${tag}-${index}`}>
+                    <td>{token}</td>
+                    <td>{tag}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={2}>No POS data yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <JsonDebugBlock title="Dependency" value={result?.dependency ?? []} />
+      <JsonDebugBlock title="Semantic Roles" value={result?.semantic_roles ?? []} />
+      <JsonDebugBlock title="Raw JSON" value={result ?? {}} />
+
+      <NarrativeUnitsDebugPanel
+        error={narrativeUnitsError}
+        isLoading={narrativeUnitsIsLoading}
+        result={narrativeUnitsResult}
+        scope={scope}
+      />
+    </aside>
+  );
+}
+
+type NarrativeUnitsDebugPanelProps = {
+  error: string;
+  isLoading: boolean;
+  result: NarrativeUnitsResponse | null;
+  scope: CurrentStoryScope | null;
+};
+
+function NarrativeUnitsDebugPanel({
+  error,
+  isLoading,
+  result,
+  scope,
+}: NarrativeUnitsDebugPanelProps) {
+  const range = result?.range ?? {
+    startIndex: scope?.startIndex,
+    endIndex: scope?.endIndex,
+  };
+
+  return (
+    <section className="narrative-units-debug" aria-label="Narrative Units Debug">
+      <header className="hanlp-debug-header">
+        <div>
+          <span>Narrative Units</span>
+          <strong>{result?.story_title || scope?.title || "Current Story"}</strong>
+        </div>
+        {isLoading && <em>Parsing...</em>}
+      </header>
+
+      <section className="hanlp-debug-grid" aria-label="Narrative units summary">
+        <div>
+          <span>startIndex</span>
+          <strong>{range.startIndex ?? "N/A"}</strong>
+        </div>
+        <div>
+          <span>endIndex</span>
+          <strong>{range.endIndex ?? "N/A"}</strong>
+        </div>
+        <div>
+          <span>Sentence Count</span>
+          <strong>{result?.sentence_count ?? result?.sentences.length ?? 0}</strong>
+        </div>
+        <div>
+          <span>Parsed Sentence Count</span>
+          <strong>{result?.parsed_sentence_count ?? 0}</strong>
+        </div>
+        <div>
+          <span>Failed Sentence Count</span>
+          <strong>{result?.failed_sentence_count ?? 0}</strong>
+        </div>
+        <div>
+          <span>Entity Mention Count</span>
+          <strong>{result?.entity_mentions.length ?? 0}</strong>
+        </div>
+      </section>
+
+      {error && <div className="hanlp-debug-error">{error}</div>}
+
+      <section className="hanlp-debug-section">
+        <h3>Sentences List</h3>
+        <div className="narrative-sentence-list">
+          {result?.sentences.length ? (
+            result.sentences.map((sentence) => (
+              <article className="narrative-sentence" key={sentence.id}>
+                <header>
+                  <strong>
+                    {sentence.id}
+                    <span className={`sentence-status status-${sentence.parse_status ?? "ok"}`}>
+                      {sentence.parse_status ?? "ok"}
+                    </span>
+                  </strong>
+                  <p>{sentence.text}</p>
+                </header>
+                {sentence.cleaned_text && sentence.cleaned_text !== sentence.text && (
+                  <div className="narrative-sentence-entities">
+                    <span>cleaned_text</span>
+                    <p>{sentence.cleaned_text}</p>
+                  </div>
+                )}
+                {sentence.parse_error && (
+                  <div className="hanlp-debug-error">{sentence.parse_error}</div>
+                )}
+                <div className="hanlp-token-list">
+                  {sentence.tokens.map((token, index) => (
+                    <span key={`${sentence.id}-${token}-${index}`}>{token}</span>
+                  ))}
+                </div>
+                <div className="narrative-sentence-entities">
+                  <span>entities</span>
+                  <p>
+                    {sentence.entities.length
+                      ? sentence.entities
+                          .map((entity) => `${entity.text} / ${entity.type}`)
+                          .join(", ")
+                      : "N/A"}
+                  </p>
+                </div>
+                <JsonDebugBlock title="dependency" value={sentence.dependency} />
+                <JsonDebugBlock title="semantic_roles" value={sentence.semantic_roles} />
+              </article>
+            ))
+          ) : (
+            <p>No narrative units yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="hanlp-debug-section">
+        <h3>Entity Mentions List</h3>
+        <div className="hanlp-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>text</th>
+                <th>type</th>
+                <th>sentence_id</th>
+                <th>start</th>
+                <th>end</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result?.entity_mentions.length ? (
+                result.entity_mentions.map((mention, index) => (
+                  <tr key={`${mention.sentence_id}-${mention.text}-${index}`}>
+                    <td>{mention.text}</td>
+                    <td>{mention.type}</td>
+                    <td>{mention.sentence_id}</td>
+                    <td>{mention.start ?? "N/A"}</td>
+                    <td>{mention.end ?? "N/A"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5}>No entity mentions yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <JsonDebugBlock title="Narrative Units Raw JSON" value={result ?? {}} />
+    </section>
+  );
+}
+
+function JsonDebugBlock({ title, value }: { title: string; value: unknown }) {
+  return (
+    <section className="hanlp-debug-section">
+      <h3>{title}</h3>
+      <pre>{JSON.stringify(value, null, 2)}</pre>
     </section>
   );
 }
@@ -1217,7 +1717,13 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
           )}
           <div className="reader-copy">
             {section.paragraphs.map((paragraph, paragraphIndex) => (
-              <p key={`${section.id}-${paragraphIndex}`}>{paragraph}</p>
+              <p
+                data-section-id={section.id}
+                data-paragraph-index={paragraphIndex}
+                key={`${section.id}-${paragraphIndex}`}
+              >
+                {paragraph}
+              </p>
             ))}
           </div>
           {sectionIndex < book.sections.length - 1 && <div className="section-divider" aria-hidden="true" />}
@@ -1267,7 +1773,13 @@ function PagedTextDocumentView({
             )}
             <div className="reader-copy">
               {item.paragraphs.map((paragraph, paragraphIndex) => (
-                <p key={`${page.id}-${item.sectionId}-${paragraphIndex}`}>{paragraph}</p>
+                <p
+                  data-section-id={item.sectionId}
+                  data-paragraph-index={item.startParagraphIndex + paragraphIndex}
+                  key={`${page.id}-${item.sectionId}-${paragraphIndex}`}
+                >
+                  {paragraph}
+                </p>
               ))}
             </div>
           </section>

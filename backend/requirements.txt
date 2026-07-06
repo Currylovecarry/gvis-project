@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+hanlp_restful
+python-dotenv
+pydantic

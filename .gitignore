@@ -5,3 +5,6 @@ dist/
 .vite/
 build/
 .env
+.venv/
+__pycache__/
+*.py[cod]
