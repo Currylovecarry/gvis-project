@@ -956,6 +956,10 @@ button {
   content: "mode";
 }
 
+.reader-nav-json::after {
+  content: "json";
+}
+
 .reader-nav-pages.active::before,
 .reader-nav-mode.active::before {
   position: absolute;
@@ -995,6 +999,11 @@ button {
 .icon-button.active {
   background: transparent;
   opacity: 0.72;
+}
+
+.icon-button:disabled {
+  opacity: 0.36;
+  cursor: default;
 }
 
 .reader-pages-panel {
@@ -1592,6 +1601,168 @@ button {
   transform: rotate(-1.6deg);
 }
 
+.narrative-debug-panel {
+  width: min(760px, calc(100vw - 336px));
+  margin: 0 0 120px clamp(32px, 8vw, 122px);
+  padding: 22px 0 0;
+  color: var(--reader-ink);
+  border-top: 1px solid var(--reader-line);
+  font-family: var(--sans);
+}
+
+.narrative-debug-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.narrative-debug-header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.narrative-debug-header span,
+.narrative-debug-header em,
+.narrative-debug-grid span {
+  color: var(--reader-muted);
+  font-size: 12px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+.narrative-debug-header strong {
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.narrative-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.narrative-debug-grid div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--reader-line);
+}
+
+.narrative-debug-grid strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.narrative-debug-section {
+  margin: 0 0 22px;
+}
+
+.narrative-debug-section h3 {
+  margin: 0 0 10px;
+  color: var(--reader-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.narrative-debug-section p,
+.narrative-debug-section summary {
+  margin: 0;
+  color: var(--reader-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.narrative-debug-section pre {
+  max-height: 300px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  color: var(--reader-ink);
+  background: rgba(31, 30, 26, 0.035);
+  border: 1px solid var(--reader-line);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.narrative-debug-error {
+  margin: 0 0 18px;
+  padding: 10px 0;
+  color: #8a3324;
+  border-top: 1px solid rgba(138, 51, 36, 0.24);
+  border-bottom: 1px solid rgba(138, 51, 36, 0.24);
+  font-size: 13px;
+}
+
+.theme-night .narrative-debug-error {
+  color: #ffb5a5;
+}
+
+.narrative-debug-list {
+  display: grid;
+  gap: 14px;
+}
+
+.narrative-debug-item {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--reader-line);
+}
+
+.narrative-debug-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.narrative-debug-item header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.narrative-debug-item header strong {
+  color: var(--reader-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.narrative-debug-item header span {
+  flex: 0 0 auto;
+  color: var(--reader-muted);
+  font-size: 12px;
+}
+
+.narrative-debug-item dl {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.narrative-debug-item dt {
+  color: var(--reader-muted);
+}
+
+.narrative-debug-item dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--reader-ink);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .welcome-card {
     width: min(680px, calc(100vw - 32px));
@@ -1662,6 +1833,11 @@ button {
   }
 
   .reader-document {
+    width: min(620px, calc(100vw - 236px));
+    margin-left: 20px;
+  }
+
+  .narrative-debug-panel {
     width: min(620px, calc(100vw - 236px));
     margin-left: 20px;
   }
@@ -1944,6 +2120,20 @@ button {
   .pdf-document {
     width: 100%;
     margin: 12px auto 60px;
+  }
+
+  .narrative-debug-panel {
+    width: 100%;
+    margin: 0 auto 80px;
+  }
+
+  .narrative-debug-grid,
+  .narrative-debug-item dl {
+    grid-template-columns: 1fr;
+  }
+
+  .narrative-debug-item header {
+    display: grid;
   }
 
   .reader-copy {

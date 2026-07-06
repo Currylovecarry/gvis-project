@@ -32,9 +32,18 @@ import logo1 from "./assets/logos/72084966-334c-451a-81b9-b37c9220db74-178297493
 import logo3 from "./assets/logos/31b1e46e-0fe1-4702-936a-bdd805edd20f-1782974934894_IMG_1349.svg";
 import logo4 from "./assets/logos/bc34797c-7ded-48bc-87cc-cfcbfe5e204f-1782974934894_IMG_1348.svg";
 import logo5 from "./assets/logos/21ce9ae5-90df-4728-9433-34dee7d13417-1782975463348_Oe_2026-07-02_14.55.33.svg";
+import { extractNarrativeJson } from "./api/narrativeApi";
+import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
 import { Book, BookFormat, books, getBookTextStats } from "./data/books";
+import type { NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
+import {
+  buildReadingScopeIndex,
+  getCurrentStoryTextUntilPage,
+  type CurrentStoryScope,
+  type ReadingScopeIndex,
+} from "./utils/readingScope";
 
 type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
@@ -52,6 +61,7 @@ type PagedSection = {
   label?: string;
   heading?: string;
   paragraphs: string[];
+  startParagraphIndex: number;
 };
 
 type PagedDocumentPage = {
@@ -176,6 +186,7 @@ function paginateSections(
           label: paragraphIndex === 0 ? section.label : undefined,
           heading: paragraphIndex === 0 ? section.heading : undefined,
           paragraphs: [],
+          startParagraphIndex: paragraphIndex,
         };
         itemChars += headingCost;
       }
@@ -656,6 +667,10 @@ function ReaderView({
   const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [activeTocItemId, setActiveTocItemId] = useState("");
+  const [narrativeScope, setNarrativeScope] = useState<CurrentStoryScope | null>(null);
+  const [narrativeResult, setNarrativeResult] = useState<NarrativeJsonResponse | null>(null);
+  const [narrativeError, setNarrativeError] = useState("");
+  const [isExtractingNarrative, setIsExtractingNarrative] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = readerMode === "paged" && !isPdf;
@@ -663,6 +678,10 @@ function ReaderView({
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
   } as CSSProperties;
+  const readingScopeIndex = useMemo<ReadingScopeIndex>(
+    () => buildReadingScopeIndex(book.sections),
+    [book.sections],
+  );
   const { pages: pagedPages, firstPageIndexBySection } = useMemo(
     () => paginateSections(book.sections, settings),
     [book.sections, settings],
@@ -685,6 +704,117 @@ function ReaderView({
     }));
   }, [book.pdf?.pageCount, book.sections, firstPageIndexBySection, isPdf]);
   const activeTocItem = tocItems.find((item) => item.id === activeTocItemId) ?? null;
+  const paragraphRangeByKey = useMemo(
+    () =>
+      new Map(
+        readingScopeIndex.paragraphs.map((paragraph) => [
+          `${paragraph.sectionId}:${paragraph.paragraphIndex}`,
+          paragraph,
+        ]),
+      ),
+    [readingScopeIndex.paragraphs],
+  );
+
+  const getPagedPageEndIndex = useCallback(() => {
+    const page = pagedPages[currentPageIndex];
+    const lastItem = page?.items[page.items.length - 1];
+    if (!lastItem) return 0;
+
+    const lastParagraphIndex =
+      lastItem.startParagraphIndex + Math.max(lastItem.paragraphs.length - 1, 0);
+    const paragraphRange = paragraphRangeByKey.get(`${lastItem.sectionId}:${lastParagraphIndex}`);
+
+    return paragraphRange?.endIndex ?? 0;
+  }, [currentPageIndex, pagedPages, paragraphRangeByKey]);
+
+  const getScrollPageEndIndex = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return 0;
+
+    const stageRect = stage.getBoundingClientRect();
+    const viewportBottom = stageRect.bottom;
+    const paragraphNodes = Array.from(
+      stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"),
+    );
+
+    let lastVisibleEndIndex = 0;
+    for (const node of paragraphNodes) {
+      const rect = node.getBoundingClientRect();
+      if (rect.top > viewportBottom) break;
+      if (rect.bottom < stageRect.top) continue;
+
+      const sectionId = node.dataset.sectionId;
+      const paragraphIndex = Number(node.dataset.paragraphIndex);
+      if (!sectionId || !Number.isFinite(paragraphIndex)) continue;
+
+      const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
+      if (paragraphRange) {
+        lastVisibleEndIndex = paragraphRange.endIndex;
+      }
+    }
+
+    return lastVisibleEndIndex || readingScopeIndex.paragraphs[0]?.endIndex || 0;
+  }, [paragraphRangeByKey, readingScopeIndex.paragraphs]);
+
+  const getCurrentStoryScope = useCallback(() => {
+    const currentPageEndIndex = isPdf
+      ? 0
+      : isPagedTextMode
+        ? getPagedPageEndIndex()
+        : getScrollPageEndIndex();
+
+    return getCurrentStoryTextUntilPage(
+      readingScopeIndex.fullText,
+      currentPageEndIndex,
+      readingScopeIndex.chapters,
+    );
+  }, [
+    getPagedPageEndIndex,
+    getScrollPageEndIndex,
+    isPagedTextMode,
+    isPdf,
+    readingScopeIndex.chapters,
+    readingScopeIndex.fullText,
+  ]);
+
+  const handleExtractNarrativeJson = useCallback(async () => {
+    const scope = getCurrentStoryScope();
+    setNarrativeScope(scope);
+    setNarrativeResult(null);
+
+    if (!scope.text.trim()) {
+      setNarrativeError("No reading scope available.");
+      return;
+    }
+
+    setIsExtractingNarrative(true);
+    setNarrativeError("");
+
+    try {
+      const result = await extractNarrativeJson({
+        story_title: scope.title,
+        text: scope.text,
+        startIndex: scope.startIndex,
+        endIndex: scope.endIndex,
+      });
+      setNarrativeResult(result);
+    } catch (error) {
+      setNarrativeError(
+        error instanceof Error
+          ? error.message
+          : "Narrative JSON extraction failed or backend is not running.",
+      );
+    } finally {
+      setIsExtractingNarrative(false);
+    }
+  }, [getCurrentStoryScope]);
+
+  useEffect(() => {
+    setNarrativeScope(null);
+    setNarrativeResult(null);
+    setNarrativeError("");
+    setIsExtractingNarrative(false);
+  }, [book.id]);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -1073,6 +1203,22 @@ function ReaderView({
               </button>
             </div>
           )}
+          <button
+            className="icon-button reader-nav-button reader-nav-json"
+            type="button"
+            onClick={() => {
+              setTocOpen(false);
+              setPagesOpen(false);
+              setSettingsOpen(false);
+              setModeOpen(false);
+              void handleExtractNarrativeJson();
+            }}
+            disabled={isExtractingNarrative}
+            aria-label="抽取叙事 JSON"
+            title="Extract Narrative JSON"
+          >
+            <BrainCircuit size={20} strokeWidth={2.2} />
+          </button>
         </div>
 
         <div className="reader-title">
@@ -1187,6 +1333,14 @@ function ReaderView({
         ) : (
           <TextDocumentView book={book} documentStyle={documentStyle} />
         )}
+        {(narrativeScope || narrativeResult || narrativeError || isExtractingNarrative) && (
+          <NarrativeDebugPanel
+            error={narrativeError}
+            isLoading={isExtractingNarrative}
+            result={narrativeResult}
+            scope={narrativeScope}
+          />
+        )}
       </div>
 
     </section>
@@ -1217,7 +1371,13 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
           )}
           <div className="reader-copy">
             {section.paragraphs.map((paragraph, paragraphIndex) => (
-              <p key={`${section.id}-${paragraphIndex}`}>{paragraph}</p>
+              <p
+                data-section-id={section.id}
+                data-paragraph-index={paragraphIndex}
+                key={`${section.id}-${paragraphIndex}`}
+              >
+                {paragraph}
+              </p>
             ))}
           </div>
           {sectionIndex < book.sections.length - 1 && <div className="section-divider" aria-hidden="true" />}
@@ -1267,7 +1427,13 @@ function PagedTextDocumentView({
             )}
             <div className="reader-copy">
               {item.paragraphs.map((paragraph, paragraphIndex) => (
-                <p key={`${page.id}-${item.sectionId}-${paragraphIndex}`}>{paragraph}</p>
+                <p
+                  data-section-id={item.sectionId}
+                  data-paragraph-index={item.startParagraphIndex + paragraphIndex}
+                  key={`${page.id}-${item.sectionId}-${paragraphIndex}`}
+                >
+                  {paragraph}
+                </p>
               ))}
             </div>
           </section>
