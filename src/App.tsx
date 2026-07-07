@@ -81,8 +81,8 @@ const progressKey = "gvis-reader-progress";
 const settingsKey = "gvis-reader-settings";
 
 const defaultSettings: ReaderSettings = {
-  fontScale: 1,
-  lineHeight: 1.72,
+  fontScale: 0.88,
+  lineHeight: 1.56,
   theme: "paper",
 };
 
@@ -749,7 +749,18 @@ function ReaderView({
 
       const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
       if (paragraphRange) {
-        lastVisibleEndIndex = paragraphRange.endIndex;
+        if (rect.bottom <= viewportBottom) {
+          lastVisibleEndIndex = paragraphRange.endIndex;
+        } else {
+          const paragraphLength = paragraphRange.endIndex - paragraphRange.startIndex;
+          const visibleRatio = rect.height <= 0 ? 0 : clamp((viewportBottom - rect.top) / rect.height, 0, 1);
+          const visibleLength = Math.max(1, Math.floor(paragraphLength * visibleRatio));
+          lastVisibleEndIndex = clamp(
+            paragraphRange.startIndex + visibleLength,
+            paragraphRange.startIndex,
+            paragraphRange.endIndex,
+          );
+        }
       }
     }
 
@@ -893,6 +904,15 @@ function ReaderView({
     });
   }, [isPagedTextMode, pagedPages.length]);
 
+  const scrollVertically = useCallback((direction: 1 | -1) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.scrollBy({
+      top: direction * Math.min(160, stage.clientHeight * 0.28),
+      behavior: "smooth",
+    });
+  }, []);
+
   const jumpToTocItem = useCallback(
     (item: TocItem) => {
       const stage = stageRef.current;
@@ -973,9 +993,29 @@ function ReaderView({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isEditing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (isEditing) return;
+
       if (event.key === "Escape") onBack();
-      if (event.key === "PageDown" || event.key === "ArrowDown") scrollByPage(1);
-      if (event.key === "PageUp" || event.key === "ArrowUp") scrollByPage(-1);
+      if (event.key === "PageDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        scrollByPage(1);
+      }
+      if (event.key === "PageUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        scrollByPage(-1);
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        scrollVertically(1);
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        scrollVertically(-1);
+      }
       if (event.key === "Home") {
         if (isPagedTextMode) {
           setCurrentPageIndex(0);
@@ -994,7 +1034,7 @@ function ReaderView({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPagedTextMode, onBack, pagedPages.length, scrollByPage]);
+  }, [isPagedTextMode, onBack, pagedPages.length, scrollByPage, scrollVertically]);
 
   useEffect(() => {
     return () => {

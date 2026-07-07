@@ -957,7 +957,7 @@ button {
 }
 
 .reader-nav-json::after {
-  content: "json";
+  content: "AI";
 }
 
 .reader-nav-pages.active::before,
