@@ -1159,6 +1159,7 @@ button {
   position: absolute;
   left: var(--node-x);
   top: var(--node-y);
+  z-index: 1;
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -1183,22 +1184,20 @@ button {
 }
 
 .reader-side-graph-node strong {
+  position: relative;
+  display: inline-block;
   max-width: 72px;
   overflow: hidden;
+  padding: 0 3px;
   color: var(--reader-ink);
+  background: var(--reader-bg);
   font-family: var(--reader-hand-cn);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.15;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.reader-side-graph-node::after {
-  width: 28px;
-  height: 1px;
-  background: rgba(31, 30, 26, 0.12);
-  content: "";
 }
 
 .reader-mode-button {
