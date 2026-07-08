@@ -5,6 +5,10 @@ type EventTimelineProps = {
   events: NarrativeEvent[];
 };
 
+type SidebarEventTimelineProps = {
+  events: NarrativeEvent[];
+};
+
 const importanceLabels: Record<NarrativeEvent["importance"], string> = {
   high: "High",
   medium: "Medium",
@@ -112,6 +116,30 @@ export function EventTimeline({ events }: EventTimelineProps) {
         )}
       </article>
     </section>
+  );
+}
+
+export function SidebarEventTimeline({ events }: SidebarEventTimelineProps) {
+  const orderedEvents = useMemo(
+    () => normalizeEvents(events).sort((first, second) => first.order - second.order),
+    [events],
+  );
+
+  if (orderedEvents.length === 0) return null;
+
+  return (
+    <aside className="reader-sidebar-timeline" aria-label="事件时间线">
+      <ol>
+        {orderedEvents.map((event) => (
+          <li className={`reader-sidebar-event reader-sidebar-event-${event.importance}`} key={event.id}>
+            <span className="reader-sidebar-event-dot">{event.order}</span>
+            <span className="reader-sidebar-event-copy">
+              <strong>{event.description}</strong>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </aside>
   );
 }
 

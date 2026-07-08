@@ -33,6 +33,8 @@ import logo3 from "./assets/logos/31b1e46e-0fe1-4702-936a-bdd805edd20f-178297493
 import logo4 from "./assets/logos/bc34797c-7ded-48bc-87cc-cfcbfe5e204f-1782974934894_IMG_1348.svg";
 import logo5 from "./assets/logos/21ce9ae5-90df-4728-9433-34dee7d13417-1782975463348_Oe_2026-07-02_14.55.33.svg";
 import { extractNarrativeJson } from "./api/narrativeApi";
+import { SidebarCharacterRelations } from "./components/CharacterGraph";
+import { SidebarEventTimeline } from "./components/EventTimeline";
 import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
 import { Book, BookFormat, books, getBookTextStats } from "./data/books";
 import type { NarrativeJsonResponse } from "./types/narrative";
@@ -778,6 +780,7 @@ function ReaderView({
   onSettingsChange,
 }: ReaderViewProps) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const narrativeDebugRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const tocItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const progressRef = useRef(progress);
@@ -794,6 +797,7 @@ function ReaderView({
   const [narrativeResult, setNarrativeResult] = useState<NarrativeJsonResponse | null>(null);
   const [narrativeError, setNarrativeError] = useState("");
   const [isExtractingNarrative, setIsExtractingNarrative] = useState(false);
+  const [isNarrativeDebugVisible, setIsNarrativeDebugVisible] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = readerMode === "paged" && !isPdf;
@@ -949,6 +953,7 @@ function ReaderView({
     setNarrativeResult(null);
     setNarrativeError("");
     setIsExtractingNarrative(false);
+    setIsNarrativeDebugVisible(false);
   }, [book.id]);
 
   useEffect(() => {
@@ -1003,6 +1008,23 @@ function ReaderView({
     onProgressChange(book.id, nextProgress);
   }, [book.id, currentPageIndex, isPagedTextMode, onProgressChange, pagedPages.length]);
 
+  const updateNarrativeDebugVisibility = useCallback(() => {
+    const stage = stageRef.current;
+    const panel = narrativeDebugRef.current;
+    if (!stage || !panel) {
+      setIsNarrativeDebugVisible(false);
+      return;
+    }
+
+    const stageRect = stage.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const isVisible =
+      panelRect.top <= stageRect.bottom - Math.min(stageRect.height * 0.16, 96) &&
+      panelRect.bottom >= stageRect.top + 24;
+
+    setIsNarrativeDebugVisible((current) => (current === isVisible ? current : isVisible));
+  }, []);
+
   const handleScroll = useCallback(() => {
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(() => {
@@ -1010,10 +1032,11 @@ function ReaderView({
       if (stage) {
         syncActiveTocItem();
       }
+      updateNarrativeDebugVisibility();
       saveCurrentProgress();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress, syncActiveTocItem]);
+  }, [saveCurrentProgress, syncActiveTocItem, updateNarrativeDebugVisibility]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
     if (isPagedTextMode) {
@@ -1173,6 +1196,19 @@ function ReaderView({
     const animationFrame = window.requestAnimationFrame(syncActiveTocItem);
     return () => window.cancelAnimationFrame(animationFrame);
   }, [book.id, isPagedTextMode, progress, readerMode, settings.fontScale, settings.lineHeight, syncActiveTocItem]);
+
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(updateNarrativeDebugVisibility);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [
+    currentPageIndex,
+    isExtractingNarrative,
+    narrativeError,
+    narrativeResult,
+    narrativeScope,
+    readerMode,
+    updateNarrativeDebugVisibility,
+  ]);
 
   useEffect(() => {
     if (!tocOpen || !activeTocItemId) return;
@@ -1383,6 +1419,7 @@ function ReaderView({
           >
             <BrainCircuit size={20} strokeWidth={2.2} />
           </button>
+          {!isNarrativeDebugVisible && <SidebarEventTimeline events={narrativeResult?.events ?? []} />}
         </div>
 
         <div className="reader-title">
@@ -1476,6 +1513,8 @@ function ReaderView({
         </div>
       </header>
 
+      {!isNarrativeDebugVisible && <SidebarCharacterRelations result={narrativeResult} />}
+
       <div className="reader-progress-track" aria-hidden="true">
         <span style={{ width: formatPercent(progress) }} />
       </div>
@@ -1498,12 +1537,14 @@ function ReaderView({
           <TextDocumentView book={book} documentStyle={documentStyle} />
         )}
         {(narrativeScope || narrativeResult || narrativeError || isExtractingNarrative) && (
-          <NarrativeDebugPanel
-            error={narrativeError}
-            isLoading={isExtractingNarrative}
-            result={narrativeResult}
-            scope={narrativeScope}
-          />
+          <div className="narrative-debug-anchor" ref={narrativeDebugRef}>
+            <NarrativeDebugPanel
+              error={narrativeError}
+              isLoading={isExtractingNarrative}
+              result={narrativeResult}
+              scope={narrativeScope}
+            />
+          </div>
         )}
       </div>
 

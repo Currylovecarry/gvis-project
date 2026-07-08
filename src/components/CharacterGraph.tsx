@@ -1,8 +1,12 @@
 import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import type { Character, NarrativeJsonResponse, Relation } from "../types/narrative";
 
 type CharacterGraphProps = {
+  result: NarrativeJsonResponse | null;
+};
+
+type SidebarCharacterRelationsProps = {
   result: NarrativeJsonResponse | null;
 };
 
@@ -209,6 +213,75 @@ export function CharacterGraph({ result }: CharacterGraphProps) {
   );
 }
 
+export function SidebarCharacterRelations({ result }: SidebarCharacterRelationsProps) {
+  const graph = useMemo(() => buildGraph(result), [result]);
+  const nodes = useMemo(
+    () =>
+      graph.characters.map((character, index) => ({
+        character,
+        color: characterColor(index),
+        position: sidebarGraphPosition(index, graph.characters.length),
+      })),
+    [graph.characters],
+  );
+  const nodeById = useMemo(
+    () => new Map(nodes.map((node) => [node.character.id, node])),
+    [nodes],
+  );
+
+  if (!result || graph.characters.length === 0) return null;
+
+  return (
+    <aside className="reader-side-relations" aria-label="人物关系">
+      <div className="reader-side-graph" role="img" aria-label="人物关系迷你图">
+        <svg className="reader-side-graph-lines" viewBox="0 0 100 100" aria-hidden="true">
+          {graph.edges.map((edge) => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
+            if (!source || !target) return null;
+
+            const labelX = (source.position.x + target.position.x) / 2;
+            const labelY = (source.position.y + target.position.y) / 2;
+
+            return (
+              <g className="reader-side-graph-edge" key={edge.id}>
+                <line
+                  x1={source.position.x}
+                  y1={source.position.y}
+                  x2={target.position.x}
+                  y2={target.position.y}
+                  stroke={relationColors[edge.type]}
+                  strokeDasharray={edge.inferred ? "3 3" : undefined}
+                />
+                <text x={labelX} y={labelY}>
+                  {edge.label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {nodes.map(({ character, color, position }) => (
+          <article
+            className="reader-side-graph-node"
+            key={character.id || character.name}
+            style={
+              {
+                "--character-color": color,
+                "--node-x": `${position.x}%`,
+                "--node-y": `${position.y}%`,
+              } as CSSProperties
+            }
+          >
+            <span aria-hidden="true">{character.name.slice(0, 1)}</span>
+            <strong>{character.name}</strong>
+          </article>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
 function GraphEmptyState({ title, description }: { title: string; description: string }) {
   return (
     <div className="character-graph-empty">
@@ -319,6 +392,36 @@ function undirectedKey(source: string, target: string) {
 function characterColor(index: number) {
   const colors = ["#b8c79a", "#d0b98e", "#bfa7a0", "#9eb9b0", "#c5b6d4", "#d4a999"];
   return colors[index % colors.length];
+}
+
+function sidebarGraphPosition(index: number, total: number) {
+  const presets: Array<Array<{ x: number; y: number }>> = [
+    [],
+    [{ x: 50, y: 50 }],
+    [
+      { x: 34, y: 48 },
+      { x: 66, y: 48 },
+    ],
+    [
+      { x: 50, y: 24 },
+      { x: 27, y: 68 },
+      { x: 73, y: 68 },
+    ],
+    [
+      { x: 50, y: 18 },
+      { x: 24, y: 46 },
+      { x: 76, y: 46 },
+      { x: 50, y: 78 },
+    ],
+  ];
+
+  if (total < presets.length) return presets[total][index];
+
+  const angle = -Math.PI / 2 + (index / total) * Math.PI * 2;
+  return {
+    x: 50 + Math.cos(angle) * 32,
+    y: 50 + Math.sin(angle) * 32,
+  };
 }
 
 function importanceWeight(importance: "high" | "medium" | "low") {
