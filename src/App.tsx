@@ -126,6 +126,129 @@ function formatLabel(format: BookFormat) {
   return labels[format];
 }
 
+function buildDemoNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResponse {
+  const isSlackWater = /Mara|Elise|Tomas/.test(scope.text);
+
+  if (isSlackWater) {
+    return {
+      story_title: scope.title,
+      range: {
+        startIndex: scope.startIndex,
+        endIndex: scope.endIndex,
+      },
+      characters: [
+        {
+          id: "c1",
+          name: "Mara",
+          aliases: [],
+          description: "She returns to the lake house after twelve years.",
+          evidence: "Twelve years, and the road still knew the shape of her hands.",
+          confidence: 0.88,
+        },
+        {
+          id: "c2",
+          name: "Elise",
+          aliases: [],
+          description: "Mara has not told her exactly when she would arrive.",
+          evidence: "She had not told Elise exactly when she would arrive.",
+          confidence: 0.82,
+        },
+        {
+          id: "c3",
+          name: "Tomas",
+          aliases: [],
+          description: "His truck is parked by the shed when Mara arrives.",
+          evidence: "Tomas's truck stood at an angle by the shed",
+          confidence: 0.8,
+        },
+        {
+          id: "c4",
+          name: "mother",
+          aliases: ["their mother"],
+          description: "The flowerbed by the shed used to be kept by the family mother.",
+          evidence: "the flowerbed their mother had kept",
+          confidence: 0.72,
+        },
+      ],
+      events: [
+        {
+          id: "e1",
+          order: 1,
+          description: "Mara slows as she reaches the lake road.",
+          characters: ["c1"],
+          importance: "medium",
+          evidence: "Mara slowed the car though no one was behind her for miles.",
+        },
+        {
+          id: "e2",
+          order: 2,
+          description: "Mara keeps her arrival time from Elise.",
+          characters: ["c1", "c2"],
+          importance: "high",
+          evidence: "She had not told Elise exactly when she would arrive.",
+        },
+        {
+          id: "e3",
+          order: 3,
+          description: "Mara sees evidence that Tomas is at the house.",
+          characters: ["c1", "c3"],
+          importance: "medium",
+          evidence: "Tomas's truck stood at an angle by the shed",
+        },
+      ],
+      relations: [
+        {
+          id: "r1",
+          source: "c1",
+          target: "c2",
+          relation_type: "unknown",
+          description: "Mara knows Elise and expects her at the house.",
+          evidence: "She had not told Elise exactly when she would arrive.",
+          confidence: 0.72,
+        },
+        {
+          id: "r2",
+          source: "c1",
+          target: "c3",
+          relation_type: "unknown",
+          description: "Mara recognizes Tomas and does not want him to be there.",
+          evidence: "Mara had hoped, foolishly, that he wouldn't be.",
+          confidence: 0.76,
+        },
+        {
+          id: "r3",
+          source: "c3",
+          target: "c4",
+          relation_type: "family",
+          description: "Tomas is connected to the family mother through the shared flowerbed reference.",
+          evidence: "one tire in the flowerbed their mother had kept",
+          confidence: 0.7,
+        },
+      ],
+    };
+  }
+
+  return {
+    story_title: scope.title,
+    range: {
+      startIndex: scope.startIndex,
+      endIndex: scope.endIndex,
+    },
+    characters: [
+      {
+        id: "c1",
+        name: "Reader",
+        aliases: [],
+        description: "A placeholder character for local graph preview.",
+        evidence: scope.text.slice(0, 80),
+        confidence: 0.5,
+      },
+    ],
+    events: [],
+    relations: [],
+  };
+}
+
 function paginateSections(
   sections: Book["sections"],
   settings: ReaderSettings,
@@ -810,10 +933,11 @@ function ReaderView({
       });
       setNarrativeResult(result);
     } catch (error) {
+      setNarrativeResult(buildDemoNarrativeJson(scope));
       setNarrativeError(
         error instanceof Error
-          ? error.message
-          : "Narrative JSON extraction failed or backend is not running.",
+          ? `${error.message} Showing local demo graph instead.`
+          : "Narrative JSON extraction failed or backend is not running. Showing local demo graph instead.",
       );
     } finally {
       setIsExtractingNarrative(false);

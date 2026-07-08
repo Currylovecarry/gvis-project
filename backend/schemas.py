@@ -25,21 +25,10 @@ class Character(BaseModel):
 class Event(BaseModel):
     id: str
     order: int
-    text_span: str
-    summary: str
+    description: str
     characters: list[str] = Field(default_factory=list)
-    event_type: Literal[
-        "action",
-        "dialogue",
-        "description",
-        "relationship",
-        "movement",
-        "object",
-        "emotion",
-        "other",
-    ]
+    importance: Literal["high", "medium", "low"]
     evidence: str
-    confidence: Confidence = Field(ge=0.0, le=1.0)
 
 
 class Relation(BaseModel):

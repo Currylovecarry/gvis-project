@@ -22,20 +22,10 @@ export interface Character {
 export interface Event {
   id: string;
   order: number;
-  text_span: string;
-  summary: string;
+  description: string;
   characters: string[];
-  event_type:
-    | "action"
-    | "dialogue"
-    | "description"
-    | "relationship"
-    | "movement"
-    | "object"
-    | "emotion"
-    | "other";
+  importance: "high" | "medium" | "low";
   evidence: string;
-  confidence: number;
 }
 
 export interface Relation {

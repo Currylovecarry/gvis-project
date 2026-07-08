@@ -5,6 +5,8 @@ import type {
   NarrativeJsonResponse,
   Relation,
 } from "../types/narrative";
+import { CharacterGraph } from "./CharacterGraph";
+import { EventTimeline } from "./EventTimeline";
 
 type NarrativeDebugPanelProps = {
   error: string;
@@ -60,6 +62,10 @@ export function NarrativeDebugPanel({
       </section>
 
       {error && <div className="narrative-debug-error">{error}</div>}
+
+      <CharacterGraph result={result} />
+
+      <EventTimeline events={result?.events ?? []} />
 
       <section className="narrative-debug-section">
         <h3>Characters</h3>
@@ -134,8 +140,8 @@ function EventItem({ event }: { event: NarrativeEvent }) {
   return (
     <article className="narrative-debug-item">
       <header>
-        <strong>{event.order}. {event.summary}</strong>
-        <span>{event.event_type} · {formatConfidence(event.confidence)}</span>
+        <strong>{event.order}. {event.description}</strong>
+        <span>{event.importance}</span>
       </header>
       <dl>
         <dt>characters</dt>
