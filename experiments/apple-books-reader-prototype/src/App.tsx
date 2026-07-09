@@ -82,6 +82,13 @@ function formatLabel(format: BookFormat) {
   return labels[format];
 }
 
+const preloadedBooks = [
+  { path: "/books/财神与爱神 - 未知.epub", id: "the-gift-of-the-magi" },
+  { path: "/books/托宾的手相 - 未知.epub", id: "tobin-s-palm" },
+  { path: "/books/华而不实 - 未知.epub", id: "the-shamrock-and-the-palm" },
+  { path: "/books/玛吉登场 - 未知.epub", id: "maggie-appears" },
+];
+
 function App() {
   const [view, setView] = useState<View>("library");
   const [query, setQuery] = useState("");
@@ -93,6 +100,29 @@ function App() {
   const [progressByBook, setProgressByBook] = useState<Record<string, number>>(() =>
     Object.fromEntries(books.map((book) => [book.id, getSavedProgress(book.id)])),
   );
+
+  useEffect(() => {
+    const loadPreloadedBooks = async () => {
+      for (const { path, id } of preloadedBooks) {
+        try {
+          const response = await fetch(path);
+          const blob = await response.blob();
+          const file = new File([blob], path.split("/").pop() || "book.epub", {
+            type: "application/epub+zip",
+          });
+          const book = await parseEpubFile(file);
+          book.id = id;
+          setLibraryBooks((prev) => {
+            if (prev.some((b) => b.id === id)) return prev;
+            return [...prev, book];
+          });
+        } catch (error) {
+          console.error(`Failed to load ${path}:`, error);
+        }
+      }
+    };
+    loadPreloadedBooks();
+  }, []);
 
   const filteredBooks = useMemo(() => {
     const normalized = query.trim().toLowerCase();

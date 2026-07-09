@@ -341,8 +341,10 @@ function paginateSections(
 const coverImages = [logo1, logo3, logo4, logo5];
 
 const preloadedBooks = [
-  { path: "/books/the-deal.epub", id: "the-deal" },
-  { path: "/books/o-henry.epub", id: "o-henry" },
+  { path: "/books/财神与爱神 - 未知.epub", id: "the-gift-of-the-magi" },
+  { path: "/books/托宾的手相 - 未知.epub", id: "tobin-s-palm" },
+  { path: "/books/华而不实 - 未知.epub", id: "the-shamrock-and-the-palm" },
+  { path: "/books/玛吉登场 - 未知.epub", id: "maggie-appears" },
 ];
 
 function App() {
