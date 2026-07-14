@@ -23,7 +23,11 @@ export interface Event {
   id: string;
   order: number;
   description: string;
+  /** The explicit setting of this event. Kept optional for older extractions. */
+  location?: string;
   characters: string[];
+  /** Per-character share of this event, normalized by the visualization when needed. */
+  character_importance?: Record<string, number>;
   importance: "high" | "medium" | "low";
   evidence: string;
 }

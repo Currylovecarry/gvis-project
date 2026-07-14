@@ -52,7 +52,9 @@ Event item shape:
   "id": "e1",
   "order": 1,
   "description": "short event description from the provided text",
+  "location": "explicit place where the event happens, or Unspecified when the text does not say",
   "characters": ["c1"],
+  "character_importance": {"c1": 1.0},
   "importance": "high",
   "evidence": "exact evidence copied from the provided text"
 }
@@ -72,6 +74,10 @@ Relation item shape:
 # importance 只能从以下枚举值中选择。
 Allowed importance values:
 high, medium, low.
+
+Event visualization rules:
+- location must be a concise place label stated or directly implied by the text; use "Unspecified" when there is no reliable place.
+- character_importance maps every id in event.characters to a number from 0 to 1. The values express the characters' relative importance in this particular event and should sum to approximately 1. Give equal shares when the text provides no basis to distinguish them.
 
 # relation_type 只能从以下枚举值中选择。
 Allowed relation_type values:
@@ -102,7 +108,7 @@ Remember:
 - Preserve the story_title and range values exactly.  # 原样保留标题和阅读范围。
 - Every item must include evidence from the text.  # 每个对象都必须有原文证据。
 - Every character must include id, name, aliases, description, evidence, confidence.  # 每个角色必须包含完整字段。
-- Every event must include id, order, description, characters, importance, evidence.  # 每个事件必须包含完整字段。
+- Every event must include id, order, description, location, characters, character_importance, importance, evidence.  # 每个事件必须包含完整字段。
 - Every relation must include id, source, target, relation_type, description, evidence, confidence.  # 每个关系必须包含完整字段。
 - Use character ids, not character names, in event.characters, relation.source, and relation.target.  # 事件和关系中引用角色时使用角色 id。
 - If a character, event, or relation cannot be represented with all required fields, omit it.  # 字段不完整就省略该对象。
@@ -119,7 +125,7 @@ Convert it into strict JSON matching the required Narrative JSON schema.  # 转�
 Do not add markdown or explanations.  # 不要添加 Markdown 或解释。
 Do not add facts not present in the previous output.  # 不要添加前一次输出中不存在的新事实。
 Every character must include id, name, aliases, description, evidence, confidence.  # 每个角色必须包含完整字段。
-Every event must include id, order, description, characters, importance, evidence.  # 每个事件必须包含完整字段。
+Every event must include id, order, description, location, characters, character_importance, importance, evidence.  # 每个事件必须包含完整字段。
 Every relation must include id, source, target, relation_type, description, evidence, confidence.  # 每个关系必须包含完整字段。
 Use character ids, not character names, in event.characters, relation.source, and relation.target.  # 事件和关系中引用角色时使用角色 id。
 If an item is incomplete, remove that item instead of returning a partial object.  # 如果对象字段不完整，删除该对象。

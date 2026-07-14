@@ -37,7 +37,7 @@ import { SidebarCharacterRelations } from "./components/CharacterGraph";
 import { SidebarEventTimeline } from "./components/EventTimeline";
 import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
 import { Book, BookFormat, books, getBookTextStats } from "./data/books";
-import type { NarrativeJsonResponse } from "./types/narrative";
+import type { Character, Event as NarrativeEvent, NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
 import {
@@ -87,6 +87,24 @@ const defaultSettings: ReaderSettings = {
   lineHeight: 1.56,
   theme: "paper",
 };
+
+const FORTUNE_AND_LOVE_CHARACTERS: Character[] = [
+  { id: "anthony", name: "安东尼·洛克沃尔", aliases: [], description: "", evidence: "", confidence: 1 },
+  { id: "richard", name: "理查德", aliases: [], description: "", evidence: "", confidence: 1 },
+  { id: "lantry", name: "兰特里小姐", aliases: [], description: "", evidence: "", confidence: 1 },
+  { id: "ellen", name: "埃伦姑妈", aliases: [], description: "", evidence: "", confidence: 1 },
+  { id: "kelly", name: "凯利", aliases: [], description: "", evidence: "", confidence: 1 },
+];
+
+const FORTUNE_AND_LOVE_EVENTS: NarrativeEvent[] = [
+  { id: "f1", order: 1, description: "安东尼与儿子谈论金钱", location: "洛克沃尔书房", characters: ["anthony", "richard"], character_importance: { anthony: 0.58, richard: 0.42 }, importance: "medium", evidence: "" },
+  { id: "f2", order: 2, description: "理查德说出求爱的难题", location: "洛克沃尔书房", characters: ["richard", "anthony"], character_importance: { richard: 0.7, anthony: 0.3 }, importance: "high", evidence: "" },
+  { id: "f3", order: 3, description: "埃伦姑妈交出母亲的戒指", location: "埃伦姑妈家", characters: ["ellen", "richard"], character_importance: { ellen: 0.55, richard: 0.45 }, importance: "medium", evidence: "" },
+  { id: "f4", order: 4, description: "理查德在车站接到兰特里", location: "中央火车站", characters: ["richard", "lantry"], character_importance: { richard: 0.48, lantry: 0.52 }, importance: "medium", evidence: "" },
+  { id: "f5", order: 5, description: "马车陷入预先安排的交通阻塞", location: "第三十四号街", characters: ["richard", "lantry", "anthony", "kelly"], character_importance: { richard: 0.32, lantry: 0.3, anthony: 0.25, kelly: 0.13 }, importance: "high", evidence: "" },
+  { id: "f6", order: 6, description: "理查德向兰特里表白并订婚", location: "第三十四号街", characters: ["richard", "lantry"], character_importance: { richard: 0.48, lantry: 0.52 }, importance: "high", evidence: "" },
+  { id: "f7", order: 7, description: "凯利揭示交通阻塞的安排", location: "洛克沃尔书房", characters: ["kelly", "anthony"], character_importance: { kelly: 0.55, anthony: 0.45 }, importance: "medium", evidence: "" },
+];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -177,7 +195,9 @@ function buildDemoNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResponse
           id: "e1",
           order: 1,
           description: "Mara slows as she reaches the lake road.",
+          location: "Lake road",
           characters: ["c1"],
+          character_importance: { c1: 1 },
           importance: "medium",
           evidence: "Mara slowed the car though no one was behind her for miles.",
         },
@@ -185,7 +205,9 @@ function buildDemoNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResponse
           id: "e2",
           order: 2,
           description: "Mara keeps her arrival time from Elise.",
+          location: "Lake house",
           characters: ["c1", "c2"],
+          character_importance: { c1: 0.65, c2: 0.35 },
           importance: "high",
           evidence: "She had not told Elise exactly when she would arrive.",
         },
@@ -193,7 +215,9 @@ function buildDemoNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResponse
           id: "e3",
           order: 3,
           description: "Mara sees evidence that Tomas is at the house.",
+          location: "Shed",
           characters: ["c1", "c3"],
+          character_importance: { c1: 0.45, c3: 0.55 },
           importance: "medium",
           evidence: "Tomas's truck stood at an angle by the shed",
         },
@@ -588,6 +612,7 @@ function LibraryView({
   importError,
 }: LibraryViewProps) {
   const fileInputId = "book-import-input";
+  const [libraryPage, setLibraryPage] = useState<"shelf" | "demo">("shelf");
 
   const handleImport = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -598,6 +623,14 @@ function LibraryView({
 
   return (
     <div className="library-layout">
+      <input
+        id={fileInputId}
+        className="file-input"
+        type="file"
+        accept=".epub,.txt,.pdf,application/epub+zip,application/pdf,text/plain"
+        disabled={isImporting}
+        onChange={handleImport}
+      />
       <header className="mobile-header">
         <strong className="brand-title">
           <img className="brand-emblem" src="/site-icon.png" alt="" aria-hidden="true" />
@@ -645,13 +678,17 @@ function LibraryView({
         </label>
 
         <nav className="nav-list">
-          <button className="nav-item active" type="button">
+          <button className={`nav-item${libraryPage === "shelf" ? " active" : ""}`} type="button" onClick={() => setLibraryPage("shelf")}>
             <Library size={19} strokeWidth={2.1} />
             <span>全部图书</span>
           </button>
           <button className="nav-item" type="button">
             <BookOpen size={19} strokeWidth={2.1} />
             <span>继续阅读</span>
+          </button>
+          <button className={`nav-item${libraryPage === "demo" ? " active" : ""}`} type="button" onClick={() => setLibraryPage("demo")}>
+            <Sparkles size={19} strokeWidth={2.1} />
+            <span>可视化 Demo</span>
           </button>
         </nav>
 
@@ -660,56 +697,65 @@ function LibraryView({
         </div>
       </aside>
 
-      <section className="library-main" aria-label="书库">
-        <header className="library-header">
-          <div>
-            <p>Library</p>
-            <h1>书库</h1>
-          </div>
-          <div className="library-actions">
-            <input
-              id={fileInputId}
-              className="file-input"
-              type="file"
-              accept=".epub,.txt,.pdf,application/epub+zip,application/pdf,text/plain"
-              disabled={isImporting}
-              onChange={handleImport}
+      <section className={`library-main${libraryPage === "demo" ? " library-main-demo" : ""}`} aria-label="书库">
+        {libraryPage === "demo" ? (
+          <section className="library-map-demo" aria-label="财神与爱神事件地点图示例">
+            <header>
+              <p>Visualization demo</p>
+              <h1>财神与爱神</h1>
+              <span>事件进展与地点</span>
+            </header>
+            <SidebarEventTimeline
+              characters={FORTUNE_AND_LOVE_CHARACTERS}
+              events={FORTUNE_AND_LOVE_EVENTS}
+              variant="demo"
             />
-            <label
-              className={`import-button${isImporting ? " importing" : ""}`}
-              htmlFor={fileInputId}
-              aria-label="导入图书"
-              title={isImporting ? "正在导入" : "导入图书"}
-            >
-              <Upload size={19} strokeWidth={2.2} />
-              <span>{isImporting ? "导入中" : "导入"}</span>
-            </label>
-          </div>
-        </header>
-
-        {libraryBooks.length ? (
-          <div className="book-grid">
-            {libraryBooks.map((book) => (
-              <BookTile
-                book={book}
-                key={book.id}
-                canDelete={!books.some((sampleBook) => sampleBook.id === book.id)}
-                onOpenBook={onOpenBook}
-                onDeleteBook={onDeleteBook}
-              />
-            ))}
-          </div>
+          </section>
         ) : (
-          <div className="empty-state">
-            <FileText size={34} strokeWidth={1.8} />
-            <strong>没有找到匹配的图书</strong>
-          </div>
-        )}
+          <>
+            <header className="library-header">
+              <div>
+                <p>Library</p>
+                <h1>书库</h1>
+              </div>
+              <div className="library-actions">
+                <label
+                  className={`import-button${isImporting ? " importing" : ""}`}
+                  htmlFor={fileInputId}
+                  aria-label="导入图书"
+                  title={isImporting ? "正在导入" : "导入图书"}
+                >
+                  <Upload size={19} strokeWidth={2.2} />
+                  <span>{isImporting ? "导入中" : "导入"}</span>
+                </label>
+              </div>
+            </header>
 
-        <footer className="library-footer">
-          <span>{isImporting ? "正在解析文件..." : `${libraryBooks.length} 本书`}</span>
-          {importError && <strong>{importError}</strong>}
-        </footer>
+            {libraryBooks.length ? (
+              <div className="book-grid">
+                {libraryBooks.map((book) => (
+                  <BookTile
+                    book={book}
+                    key={book.id}
+                    canDelete={!books.some((sampleBook) => sampleBook.id === book.id)}
+                    onOpenBook={onOpenBook}
+                    onDeleteBook={onDeleteBook}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <FileText size={34} strokeWidth={1.8} />
+                <strong>没有找到匹配的图书</strong>
+              </div>
+            )}
+
+            <footer className="library-footer">
+              <span>{isImporting ? "正在解析文件..." : `${libraryBooks.length} 本书`}</span>
+              {importError && <strong>{importError}</strong>}
+            </footer>
+          </>
+        )}
       </section>
     </div>
   );
@@ -800,6 +846,7 @@ function ReaderView({
   const [narrativeError, setNarrativeError] = useState("");
   const [isExtractingNarrative, setIsExtractingNarrative] = useState(false);
   const [isNarrativeDebugVisible, setIsNarrativeDebugVisible] = useState(false);
+  const [isNarrativeMapFullscreen, setIsNarrativeMapFullscreen] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = readerMode === "paged" && !isPdf;
@@ -956,6 +1003,7 @@ function ReaderView({
     setNarrativeError("");
     setIsExtractingNarrative(false);
     setIsNarrativeDebugVisible(false);
+    setIsNarrativeMapFullscreen(false);
   }, [book.id]);
 
   useEffect(() => {
@@ -1421,7 +1469,14 @@ function ReaderView({
           >
             <BrainCircuit size={20} strokeWidth={2.2} />
           </button>
-          {!isNarrativeDebugVisible && <SidebarEventTimeline events={narrativeResult?.events ?? []} />}
+          {!isNarrativeDebugVisible && (
+            <SidebarEventTimeline
+              characters={narrativeResult?.characters ?? []}
+              events={narrativeResult?.events ?? []}
+              onExpand={() => setIsNarrativeMapFullscreen(true)}
+              showDemoWhenEmpty={false}
+            />
+          )}
         </div>
 
         <div className="reader-title">
@@ -1516,6 +1571,26 @@ function ReaderView({
       </header>
 
       {!isNarrativeDebugVisible && <SidebarCharacterRelations result={narrativeResult} />}
+
+      {isNarrativeMapFullscreen && (
+        <section className="reader-narrative-fullscreen" aria-label="完整叙事可视化">
+          <header>
+            <div>
+              <span>当前阅读范围</span>
+              <strong>事件 · 地点</strong>
+            </div>
+            <button type="button" onClick={() => setIsNarrativeMapFullscreen(false)} aria-label="关闭完整视图">
+              关闭 ×
+            </button>
+          </header>
+          <SidebarEventTimeline
+            characters={narrativeResult?.characters ?? []}
+            events={narrativeResult?.events ?? []}
+            showDemoWhenEmpty={false}
+            variant="fullscreen"
+          />
+        </section>
+      )}
 
       <div className="reader-progress-track" aria-hidden="true">
         <span style={{ width: formatPercent(progress) }} />

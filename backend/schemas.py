@@ -26,7 +26,9 @@ class Event(BaseModel):
     id: str
     order: int
     description: str
+    location: str = "Unspecified"
     characters: list[str] = Field(default_factory=list)
+    character_importance: dict[str, float] = Field(default_factory=dict)
     importance: Literal["high", "medium", "low"]
     evidence: str
 
