@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Character, Event as NarrativeEvent } from "../types/narrative";
 
 type EventTimelineProps = {
@@ -10,6 +16,7 @@ type SidebarEventTimelineProps = {
   characters: Character[];
   variant?: "sidebar" | "fullscreen" | "demo";
   onExpand?: () => void;
+  onClose?: () => void;
   showDemoWhenEmpty?: boolean;
 };
 
@@ -22,6 +29,12 @@ const EVENT_RADII: Record<NarrativeEvent["importance"], number> = {
   high: 31,
   medium: 19,
   low: 10,
+};
+
+const SIDEBAR_EVENT_RADII: Record<NarrativeEvent["importance"], number> = {
+  high: 26,
+  medium: 18,
+  low: 11,
 };
 
 const CHARACTER_COLORS = ["#bed7ed", "#dce8ba", "#e6c6c4", "#c3b3d0", "#e6c48f", "#fcf8b9"];
@@ -173,6 +186,7 @@ export function SidebarEventTimeline({
   characters,
   variant = "sidebar",
   onExpand,
+  onClose,
   showDemoWhenEmpty = true,
 }: SidebarEventTimelineProps) {
   const isDemo = showDemoWhenEmpty && events.length === 0;
@@ -185,7 +199,6 @@ export function SidebarEventTimeline({
     [sourceEvents],
   );
   const [selectedEvent, setSelectedEvent] = useState<VisualEvent | null>(null);
-  const [sidebarEndIndex, setSidebarEndIndex] = useState(0);
   const [hoveredCharacter, setHoveredCharacter] = useState<{ name: string; x: number; y: number } | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<{ description: string; x: number; y: number } | null>(null);
   const characterLabels = useMemo(
@@ -197,16 +210,7 @@ export function SidebarEventTimeline({
     return new Map(ids.map((id, index) => [id, CHARACTER_COLORS[index % CHARACTER_COLORS.length]]));
   }, [orderedEvents]);
 
-  useEffect(() => {
-    setSidebarEndIndex(Math.max(0, orderedEvents.length - 1));
-  }, [orderedEvents.length]);
-
-  const displayedEvents = useMemo(
-    () => variant === "sidebar"
-      ? orderedEvents.slice(Math.max(0, sidebarEndIndex - 1), sidebarEndIndex + 1)
-      : orderedEvents,
-    [orderedEvents, sidebarEndIndex, variant],
-  );
+  const displayedEvents = orderedEvents;
   const locations = useMemo(
     () => Array.from(new Set(displayedEvents.map((event) => event.location))),
     [displayedEvents],
@@ -214,9 +218,11 @@ export function SidebarEventTimeline({
 
   useEffect(() => {
     setSelectedEvent((current) =>
-      displayedEvents.find((event) => event.id === current?.id) ?? displayedEvents[displayedEvents.length - 1] ?? null,
+      displayedEvents.find((event) => event.id === current?.id)
+      ?? displayedEvents[displayedEvents.length - 1]
+      ?? null,
     );
-  }, [displayedEvents]);
+  }, [displayedEvents, variant]);
 
   useEffect(() => {
     const viewport = mapScrollRef.current;
@@ -225,43 +231,61 @@ export function SidebarEventTimeline({
   }, [orderedEvents, variant]);
 
   const scrollEvents = (direction: -1 | 1) => {
-    if (variant === "sidebar") {
-      setSidebarEndIndex((current) => Math.min(Math.max(current + direction, 0), orderedEvents.length - 1));
-      return;
-    }
-    mapScrollRef.current?.scrollBy({ left: direction * 360, behavior: "smooth" });
+    const viewport = mapScrollRef.current;
+    if (!viewport) return;
+    const distance = variant === "sidebar" ? Math.max(180, viewport.clientWidth * 0.82) : 360;
+    viewport.scrollBy({ left: direction * distance, behavior: "smooth" });
   };
 
   if (orderedEvents.length === 0) {
     return null;
   }
 
-  const labelWidth = 88;
-  const eventSpacing = variant === "sidebar" ? 112 : 150;
-  const chartWidth = Math.max(330, labelWidth + 120 + Math.max(displayedEvents.length - 1, 0) * eventSpacing);
+  const labelWidth = variant === "sidebar" ? 16 : 88;
+  const eventSpacing = variant === "sidebar" ? 160 : 150;
+  const locationGap = variant === "demo" ? 14 : variant === "sidebar" ? 8 : 24;
+  const minimumChartWidth = variant === "sidebar" ? 250 : 330;
+  const summaryCharactersPerLine = variant === "sidebar" ? 8 : SUMMARY_CHARACTERS_PER_LINE;
+  const summaryLineHeight = variant === "sidebar" ? 12 : SUMMARY_LINE_HEIGHT;
+  const eventRadius = (event: VisualEvent) =>
+    variant === "sidebar" ? SIDEBAR_EVENT_RADII[event.importance] : EVENT_RADII[event.importance];
+  const chartWidth = Math.max(
+    minimumChartWidth,
+    labelWidth + (variant === "sidebar" ? 72 : 120) + Math.max(displayedEvents.length - 1, 0) * eventSpacing,
+  );
   const locationLayouts = locations.map((location) => {
     const locationEvents = displayedEvents.filter((event) => event.location === location);
-    const top = Math.max(...locationEvents.map((event) => EVENT_RADII[event.importance] + 14), 34);
+    const top = Math.max(
+      ...locationEvents.map((event) => eventRadius(event) + (variant === "sidebar" ? 10 : 14)),
+      variant === "sidebar" ? 28 : 34,
+    );
     const bottom = Math.max(
       ...locationEvents.map((event) =>
-        EVENT_RADII[event.importance]
-        + 28
-        + Math.max(getStorySummaryLines(event.description).length - 1, 0) * SUMMARY_LINE_HEIGHT,
+        eventRadius(event)
+        + (variant === "sidebar" ? 22 : 28)
+        + Math.max(getStorySummaryLines(event.description, summaryCharactersPerLine).length - 1, 0)
+          * summaryLineHeight,
       ),
-      54,
+      variant === "sidebar" ? 48 : 54,
     );
     return { location, top, bottom, y: 0 };
   });
   locationLayouts.forEach((layout, index) => {
     const previous = locationLayouts[index - 1];
-    layout.y = previous ? previous.y + previous.bottom + layout.top + 24 : layout.top + 12;
+    layout.y = previous
+      ? previous.y + previous.bottom + layout.top + locationGap
+      : layout.top + (variant === "sidebar" ? 8 : 12);
   });
   const locationY = new Map(locationLayouts.map((layout) => [layout.location, layout.y]));
   const lastLocation = locationLayouts[locationLayouts.length - 1];
-  const chartHeight = lastLocation ? lastLocation.y + lastLocation.bottom + 18 : 120;
+  const chartHeight = variant === "sidebar"
+    ? 108
+    : lastLocation
+      ? lastLocation.y + lastLocation.bottom + 18
+      : 120;
   const positionFor = (event: VisualEvent, index: number) => ({
-    x: labelWidth + 28 + index * eventSpacing,
-    y: locationY.get(event.location) ?? 48,
+    x: labelWidth + (variant === "sidebar" ? 36 : 28) + index * eventSpacing,
+    y: variant === "sidebar" ? 54 : locationY.get(event.location) ?? 48,
   });
   const connectorPath = displayedEvents
     .map((event, index) => {
@@ -273,45 +297,83 @@ export function SidebarEventTimeline({
   return (
     <aside className={`reader-sidebar-timeline event-map-variant-${variant}`} aria-label="事件地点图">
       <div className="event-map-heading">
-        <span>事件 · 地点</span>
+        {variant !== "fullscreen" && (
+          <div className="event-map-heading-copy">
+            <span>{variant === "sidebar" ? `最近事件 · ${displayedEvents.length}` : "事件 · 地点"}</span>
+            {variant === "sidebar" && (
+              <small>向左滑动回看</small>
+            )}
+          </div>
+        )}
         <div className="event-map-controls">
-          <button type="button" onClick={() => scrollEvents(-1)} aria-label="查看之前的事件" title="之前的事件">‹</button>
-          <button type="button" onClick={() => scrollEvents(1)} aria-label="查看之后的事件" title="之后的事件">›</button>
+          {variant !== "sidebar" && (
+            <>
+              <button
+                type="button"
+                onClick={() => scrollEvents(-1)}
+                aria-label="查看之前的事件"
+                title="之前的事件"
+              >‹</button>
+              <button
+                type="button"
+                onClick={() => scrollEvents(1)}
+                aria-label="查看之后的事件"
+                title="之后的事件"
+              >›</button>
+            </>
+          )}
           {onExpand && <button className="event-map-expand" type="button" onClick={onExpand}>展开</button>}
+          {onClose && (
+            <button className="event-map-close" type="button" onClick={onClose} aria-label="关闭完整视图">
+              关闭 ×
+            </button>
+          )}
         </div>
       </div>
-      <div className="event-map-legend" aria-label="角色图例">
-        {Array.from(characterColors.entries()).map(([id, color]) => (
-          <span key={id}>
-            <i style={{ backgroundColor: color }} aria-hidden="true" />
-            {characterLabels.get(id) ?? id}
-          </span>
-        ))}
-      </div>
+      {variant !== "sidebar" && (
+        <div className="event-map-legend" aria-label="角色图例">
+          {Array.from(characterColors.entries()).map(([id, color]) => (
+            <span key={id}>
+              <i style={{ backgroundColor: color }} aria-hidden="true" />
+              {characterLabels.get(id) ?? id}
+            </span>
+          ))}
+        </div>
+      )}
       <div
         className="event-map-scroll"
         ref={mapScrollRef}
         onPointerDown={(event) => {
-          if (variant === "sidebar") swipeStartXRef.current = event.clientX;
+          if (variant !== "sidebar") return;
+          swipeStartXRef.current = event.clientX;
+          event.currentTarget.setPointerCapture(event.pointerId);
         }}
         onPointerUp={(event) => {
           if (variant !== "sidebar" || swipeStartXRef.current === null) return;
           const distance = event.clientX - swipeStartXRef.current;
           swipeStartXRef.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
           if (distance < -36) scrollEvents(-1);
           if (distance > 36) scrollEvents(1);
         }}
-        onPointerCancel={() => {
+        onPointerCancel={(event) => {
           swipeStartXRef.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
         }}
       >
         <svg
           className="event-map"
+          height={variant === "sidebar" ? chartHeight : undefined}
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          width={variant === "sidebar" ? chartWidth : undefined}
           role="img"
           aria-label="按故事进展和地点排列的事件图"
         >
-          {locations.map((location) => {
+          {variant !== "sidebar" && locations.map((location) => {
             const y = locationY.get(location) ?? 48;
             return (
               <g key={location}>
@@ -323,7 +385,7 @@ export function SidebarEventTimeline({
           <path className="event-map-connector" d={connectorPath} />
           {displayedEvents.map((event, index) => {
             const { x, y } = positionFor(event, index);
-            const radius = EVENT_RADII[event.importance];
+            const radius = eventRadius(event);
             const displayDescription = formatEventDescription(event.description);
             return (
               <g
@@ -337,6 +399,16 @@ export function SidebarEventTimeline({
                 tabIndex={0}
                 aria-label={`事件 ${event.order}: ${displayDescription}`}
               >
+                {variant === "sidebar" && (
+                  <text
+                    className="event-map-node-location"
+                    x={x}
+                    y={y - radius - 14}
+                    textAnchor="middle"
+                  >
+                    {event.location}
+                  </text>
+                )}
                 <circle
                   className="event-map-core"
                   cx={x}
@@ -361,12 +433,26 @@ export function SidebarEventTimeline({
                   centerY={y}
                   radius={radius + 7}
                 />
-                <StorySummary x={x} y={y + radius + 28} text={displayDescription} />
+                {variant !== "sidebar" && (
+                  <StorySummary
+                    x={x}
+                    y={y + radius + 28}
+                    text={displayDescription}
+                    charactersPerLine={summaryCharactersPerLine}
+                    lineHeight={summaryLineHeight}
+                  />
+                )}
               </g>
             );
           })}
         </svg>
       </div>
+      {selectedEvent && variant === "sidebar" && (
+        <p className="event-map-sidebar-detail" aria-live="polite">
+          <strong>{formatEventDescription(selectedEvent.description)}</strong>
+          <span>{selectedEvent.location} · 事件 {selectedEvent.order}</span>
+        </p>
+      )}
       {selectedEvent && variant !== "sidebar" && (
         <p className="event-map-detail" aria-live="polite">
           <strong>事件 {selectedEvent.order}</strong>{formatEventDescription(selectedEvent.description)}
@@ -395,13 +481,25 @@ export function SidebarEventTimeline({
   );
 }
 
-function StorySummary({ x, y, text }: { x: number; y: number; text: string }) {
-  const lines = getStorySummaryLines(text);
+function StorySummary({
+  x,
+  y,
+  text,
+  charactersPerLine = SUMMARY_CHARACTERS_PER_LINE,
+  lineHeight = SUMMARY_LINE_HEIGHT,
+}: {
+  x: number;
+  y: number;
+  text: string;
+  charactersPerLine?: number;
+  lineHeight?: number;
+}) {
+  const lines = getStorySummaryLines(text, charactersPerLine);
 
   return (
     <text className="event-map-summary" x={x} y={y} textAnchor="middle">
       {lines.map((line, index) => (
-        <tspan key={`${line}-${index}`} x={x} dy={index === 0 ? 0 : SUMMARY_LINE_HEIGHT}>{line}</tspan>
+        <tspan key={`${line}-${index}`} x={x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>
       ))}
     </text>
   );
@@ -411,13 +509,13 @@ function formatEventDescription(text: string) {
   return text.trim().replace(/[。．.]+$/u, "");
 }
 
-function getStorySummaryLines(text: string) {
+function getStorySummaryLines(text: string, charactersPerLine = SUMMARY_CHARACTERS_PER_LINE) {
   const displayText = formatEventDescription(text);
   return Array.from(
-    { length: Math.max(1, Math.ceil(displayText.length / SUMMARY_CHARACTERS_PER_LINE)) },
+    { length: Math.max(1, Math.ceil(displayText.length / charactersPerLine)) },
     (_, index) => displayText.slice(
-      index * SUMMARY_CHARACTERS_PER_LINE,
-      (index + 1) * SUMMARY_CHARACTERS_PER_LINE,
+      index * charactersPerLine,
+      (index + 1) * charactersPerLine,
     ),
   );
 }
@@ -446,38 +544,64 @@ function CharacterArcs({
   if (!characterIds.length) return null;
 
   const safeValues = characterIds.map((id) => Math.max(0, importance[id] ?? 0));
-  const total = safeValues.reduce((sum, value) => sum + value, 0) || characterIds.length;
-  const circumference = 2 * Math.PI * radius;
-  const gap = Math.min(3.2, circumference / characterIds.length / 3);
-  let offset = 0;
+  const providedTotal = safeValues.reduce((sum, value) => sum + value, 0);
+  const shares = providedTotal > 0
+    ? safeValues.map((value) => value / providedTotal)
+    : characterIds.map(() => 1 / characterIds.length);
+  const gapAngle = characterIds.length > 1 ? Math.min(5, 120 / characterIds.length) : 0;
+  let offsetAngle = 0;
 
   return (
     <g className="event-map-arcs" transform={`rotate(-90 ${centerX} ${centerY})`}>
       {characterIds.map((id, index) => {
-        const share = (safeValues[index] || (total === characterIds.length ? 1 : 0)) / total;
-        const length = Math.max(0, circumference * share - gap);
-        const node = (
+        const share = shares[index];
+        const sweepAngle = Math.max(0, 360 * share - gapAngle);
+        const commonProps = {
+          fill: "none",
+          stroke: colors.get(id) ?? CHARACTER_COLORS[index % CHARACTER_COLORS.length],
+          onPointerEnter: (event: ReactPointerEvent<SVGElement>) =>
+            onHover(labels.get(id) ?? id, event.clientX, event.clientY),
+          onPointerMove: (event: ReactPointerEvent<SVGElement>) =>
+            onHover(labels.get(id) ?? id, event.clientX, event.clientY),
+          onPointerLeave: onLeave,
+        };
+        const node = characterIds.length === 1 ? (
           <circle
+            key={id}
+            {...commonProps}
             cx={centerX}
             cy={centerY}
-            fill="none"
-            key={id}
             r={radius}
-            stroke={colors.get(id) ?? CHARACTER_COLORS[index % CHARACTER_COLORS.length]}
-            strokeDasharray={`${length} ${circumference - length}`}
-            strokeDashoffset={-offset}
-            onPointerEnter={(event) => onHover(labels.get(id) ?? id, event.clientX, event.clientY)}
-            onPointerMove={(event) => onHover(labels.get(id) ?? id, event.clientX, event.clientY)}
-            onPointerLeave={onLeave}
           >
             <title>{labels.get(id) ?? id}</title>
           </circle>
+        ) : (
+          <path
+            key={id}
+            {...commonProps}
+            d={describeArc(centerX, centerY, radius, offsetAngle + gapAngle / 2, sweepAngle)}
+          >
+            <title>{labels.get(id) ?? id}</title>
+          </path>
         );
-        offset += circumference * share;
+        offsetAngle += 360 * share;
         return node;
       })}
     </g>
   );
+}
+
+function describeArc(centerX: number, centerY: number, radius: number, startAngle: number, sweepAngle: number) {
+  const toPoint = (angle: number) => {
+    const radians = angle * Math.PI / 180;
+    return {
+      x: centerX + radius * Math.cos(radians),
+      y: centerY + radius * Math.sin(radians),
+    };
+  };
+  const start = toPoint(startAngle);
+  const end = toPoint(startAngle + sweepAngle);
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${sweepAngle > 180 ? 1 : 0} 1 ${end.x} ${end.y}`;
 }
 
 function normalizeEvents(events: NarrativeEvent[]) {

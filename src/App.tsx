@@ -5,7 +5,6 @@ import {
   CircleOff,
   FileText,
   Library,
-  List,
   Minus,
   Moon,
   Plus,
@@ -36,8 +35,9 @@ import { extractNarrativeJson } from "./api/narrativeApi";
 import { SidebarCharacterRelations } from "./components/CharacterGraph";
 import { SidebarEventTimeline } from "./components/EventTimeline";
 import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
-import { Book, BookFormat, books, getBookTextStats } from "./data/books";
-import type { Character, Event as NarrativeEvent, NarrativeJsonResponse } from "./types/narrative";
+import { Book, BookFormat, getBookTextStats } from "./data/books";
+import { DEMO_NARRATIVES } from "./data/demoNarratives";
+import type { NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
 import {
@@ -49,7 +49,6 @@ import {
 
 type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
-type ReaderMode = "scroll" | "paged";
 type AiMode = "zero" | "low" | "medium" | "high";
 
 type ReaderSettings = {
@@ -71,14 +70,6 @@ type PagedDocumentPage = {
   items: PagedSection[];
 };
 
-type TocItem = {
-  id: string;
-  label: string;
-  meta: string;
-  pageNumber?: number;
-  pageIndex?: number;
-};
-
 const progressKey = "gvis-reader-progress";
 const settingsKey = "gvis-reader-settings";
 
@@ -87,24 +78,6 @@ const defaultSettings: ReaderSettings = {
   lineHeight: 1.56,
   theme: "paper",
 };
-
-const FORTUNE_AND_LOVE_CHARACTERS: Character[] = [
-  { id: "anthony", name: "安东尼·洛克沃尔", aliases: [], description: "", evidence: "", confidence: 1 },
-  { id: "richard", name: "理查德", aliases: [], description: "", evidence: "", confidence: 1 },
-  { id: "lantry", name: "兰特里小姐", aliases: [], description: "", evidence: "", confidence: 1 },
-  { id: "ellen", name: "埃伦姑妈", aliases: [], description: "", evidence: "", confidence: 1 },
-  { id: "kelly", name: "凯利", aliases: [], description: "", evidence: "", confidence: 1 },
-];
-
-const FORTUNE_AND_LOVE_EVENTS: NarrativeEvent[] = [
-  { id: "f1", order: 1, description: "安东尼与儿子谈论金钱", location: "洛克沃尔书房", characters: ["anthony", "richard"], character_importance: { anthony: 0.58, richard: 0.42 }, importance: "medium", evidence: "" },
-  { id: "f2", order: 2, description: "理查德说出求爱的难题", location: "洛克沃尔书房", characters: ["richard", "anthony"], character_importance: { richard: 0.7, anthony: 0.3 }, importance: "high", evidence: "" },
-  { id: "f3", order: 3, description: "埃伦姑妈交出母亲的戒指", location: "埃伦姑妈家", characters: ["ellen", "richard"], character_importance: { ellen: 0.55, richard: 0.45 }, importance: "medium", evidence: "" },
-  { id: "f4", order: 4, description: "理查德在车站接到兰特里", location: "中央火车站", characters: ["richard", "lantry"], character_importance: { richard: 0.48, lantry: 0.52 }, importance: "medium", evidence: "" },
-  { id: "f5", order: 5, description: "马车陷入预先安排的交通阻塞", location: "第三十四号街", characters: ["richard", "lantry", "anthony", "kelly"], character_importance: { richard: 0.32, lantry: 0.3, anthony: 0.25, kelly: 0.13 }, importance: "high", evidence: "" },
-  { id: "f6", order: 6, description: "理查德向兰特里表白并订婚", location: "第三十四号街", characters: ["richard", "lantry"], character_importance: { richard: 0.48, lantry: 0.52 }, importance: "high", evidence: "" },
-  { id: "f7", order: 7, description: "凯利揭示交通阻塞的安排", location: "洛克沃尔书房", characters: ["kelly", "anthony"], character_importance: { kelly: 0.55, anthony: 0.45 }, importance: "medium", evidence: "" },
-];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -146,114 +119,7 @@ function formatLabel(format: BookFormat) {
   return labels[format];
 }
 
-function buildDemoNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResponse {
-  const isSlackWater = /Mara|Elise|Tomas/.test(scope.text);
-
-  if (isSlackWater) {
-    return {
-      story_title: scope.title,
-      range: {
-        startIndex: scope.startIndex,
-        endIndex: scope.endIndex,
-      },
-      characters: [
-        {
-          id: "c1",
-          name: "Mara",
-          aliases: [],
-          description: "She returns to the lake house after twelve years.",
-          evidence: "Twelve years, and the road still knew the shape of her hands.",
-          confidence: 0.88,
-        },
-        {
-          id: "c2",
-          name: "Elise",
-          aliases: [],
-          description: "Mara has not told her exactly when she would arrive.",
-          evidence: "She had not told Elise exactly when she would arrive.",
-          confidence: 0.82,
-        },
-        {
-          id: "c3",
-          name: "Tomas",
-          aliases: [],
-          description: "His truck is parked by the shed when Mara arrives.",
-          evidence: "Tomas's truck stood at an angle by the shed",
-          confidence: 0.8,
-        },
-        {
-          id: "c4",
-          name: "mother",
-          aliases: ["their mother"],
-          description: "The flowerbed by the shed used to be kept by the family mother.",
-          evidence: "the flowerbed their mother had kept",
-          confidence: 0.72,
-        },
-      ],
-      events: [
-        {
-          id: "e1",
-          order: 1,
-          description: "Mara slows as she reaches the lake road.",
-          location: "Lake road",
-          characters: ["c1"],
-          character_importance: { c1: 1 },
-          importance: "medium",
-          evidence: "Mara slowed the car though no one was behind her for miles.",
-        },
-        {
-          id: "e2",
-          order: 2,
-          description: "Mara keeps her arrival time from Elise.",
-          location: "Lake house",
-          characters: ["c1", "c2"],
-          character_importance: { c1: 0.65, c2: 0.35 },
-          importance: "high",
-          evidence: "She had not told Elise exactly when she would arrive.",
-        },
-        {
-          id: "e3",
-          order: 3,
-          description: "Mara sees evidence that Tomas is at the house.",
-          location: "Shed",
-          characters: ["c1", "c3"],
-          character_importance: { c1: 0.45, c3: 0.55 },
-          importance: "medium",
-          evidence: "Tomas's truck stood at an angle by the shed",
-        },
-      ],
-      relations: [
-        {
-          id: "r1",
-          source: "c1",
-          target: "c2",
-          relation_type: "unknown",
-          description: "Mara knows Elise and expects her at the house.",
-          evidence: "She had not told Elise exactly when she would arrive.",
-          confidence: 0.72,
-        },
-        {
-          id: "r2",
-          source: "c1",
-          target: "c3",
-          relation_type: "unknown",
-          description: "Mara recognizes Tomas and does not want him to be there.",
-          evidence: "Mara had hoped, foolishly, that he wouldn't be.",
-          confidence: 0.76,
-        },
-        {
-          id: "r3",
-          source: "c3",
-          target: "c4",
-          relation_type: "family",
-          description: "Tomas is connected to the family mother through the shared flowerbed reference.",
-          evidence: "one tire in the flowerbed their mother had kept",
-          confidence: 0.7,
-        },
-      ],
-    };
-  }
-
+function buildFallbackNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResponse {
   return {
     story_title: scope.title,
     range: {
@@ -374,15 +240,13 @@ const preloadedBooks = [
 function App() {
   const [view, setView] = useState<View>("welcome");
   const [query, setQuery] = useState("");
-  const [libraryBooks, setLibraryBooks] = useState<Book[]>(books);
-  const [activeBook, setActiveBook] = useState<Book>(books[0]);
+  const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
+  const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
   const [settings, setSettings] = useState<ReaderSettings>(readSettings);
-  const nextCoverRef = useRef(1);
-  const [progressByBook, setProgressByBook] = useState<Record<string, number>>(() =>
-    Object.fromEntries(books.map((book) => [book.id, getSavedProgress(book.id)])),
-  );
+  const nextCoverRef = useRef(0);
+  const [progressByBook, setProgressByBook] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const loadPreloadedBooks = async () => {
@@ -497,9 +361,6 @@ function App() {
   };
 
   const deleteBook = (book: Book) => {
-    const isBundledSample = books.some((sampleBook) => sampleBook.id === book.id);
-    if (isBundledSample) return;
-
     const confirmed = window.confirm(`确定要从书库删除《${book.title}》吗？`);
     if (!confirmed) return;
 
@@ -507,8 +368,8 @@ function App() {
     setLibraryBooks((currentBooks) =>
       currentBooks.filter((currentBook) => currentBook.id !== book.id),
     );
-    if (activeBook.id === book.id && fallbackBook) {
-      setActiveBook(fallbackBook);
+    if (activeBook?.id === book.id) {
+      setActiveBook(fallbackBook ?? null);
     }
     setProgressByBook((current) => {
       const { [book.id]: _deletedProgress, ...rest } = current;
@@ -521,7 +382,7 @@ function App() {
     <main className="app-shell">
       {view === "welcome" ? (
         <WelcomeView onEnter={() => setView("library")} />
-      ) : view === "library" ? (
+      ) : view === "library" || !activeBook ? (
         <LibraryView
           books={filteredBooks}
           query={query}
@@ -613,6 +474,8 @@ function LibraryView({
 }: LibraryViewProps) {
   const fileInputId = "book-import-input";
   const [libraryPage, setLibraryPage] = useState<"shelf" | "demo">("shelf");
+  const [activeDemoId, setActiveDemoId] = useState(DEMO_NARRATIVES[0].id);
+  const activeDemo = DEMO_NARRATIVES.find((demo) => demo.id === activeDemoId) ?? DEMO_NARRATIVES[0];
 
   const handleImport = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -699,15 +562,29 @@ function LibraryView({
 
       <section className={`library-main${libraryPage === "demo" ? " library-main-demo" : ""}`} aria-label="书库">
         {libraryPage === "demo" ? (
-          <section className="library-map-demo" aria-label="财神与爱神事件地点图示例">
+          <section className="library-map-demo" aria-label={`${activeDemo.title}事件地点图示例`}>
             <header>
-              <p>Visualization demo</p>
-              <h1>财神与爱神</h1>
+              <p>Visualization demo · 4 stories</p>
+              <h1>{activeDemo.title}</h1>
               <span>事件进展与地点</span>
+              <div className="library-demo-switcher" aria-label="选择实验书籍">
+                {DEMO_NARRATIVES.map((demo) => (
+                  <button
+                    className={demo.id === activeDemo.id ? "active" : ""}
+                    type="button"
+                    key={demo.id}
+                    onClick={() => setActiveDemoId(demo.id)}
+                    aria-pressed={demo.id === activeDemo.id}
+                  >
+                    {demo.title}
+                  </button>
+                ))}
+              </div>
             </header>
             <SidebarEventTimeline
-              characters={FORTUNE_AND_LOVE_CHARACTERS}
-              events={FORTUNE_AND_LOVE_EVENTS}
+              key={activeDemo.id}
+              characters={activeDemo.characters}
+              events={activeDemo.events}
               variant="demo"
             />
           </section>
@@ -737,7 +614,7 @@ function LibraryView({
                   <BookTile
                     book={book}
                     key={book.id}
-                    canDelete={!books.some((sampleBook) => sampleBook.id === book.id)}
+                    canDelete
                     onOpenBook={onOpenBook}
                     onDeleteBook={onDeleteBook}
                   />
@@ -830,17 +707,12 @@ function ReaderView({
   const stageRef = useRef<HTMLDivElement>(null);
   const narrativeDebugRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
-  const tocItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const progressRef = useRef(progress);
   const restoringRef = useRef(true);
-  const [tocOpen, setTocOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [pagesOpen, setPagesOpen] = useState(false);
-  const [readerMode, setReaderMode] = useState<ReaderMode>("paged");
   const [modeOpen, setModeOpen] = useState(false);
   const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [activeTocItemId, setActiveTocItemId] = useState("");
   const [narrativeScope, setNarrativeScope] = useState<CurrentStoryScope | null>(null);
   const [narrativeResult, setNarrativeResult] = useState<NarrativeJsonResponse | null>(null);
   const [narrativeError, setNarrativeError] = useState("");
@@ -849,7 +721,7 @@ function ReaderView({
   const [isNarrativeMapFullscreen, setIsNarrativeMapFullscreen] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
-  const isPagedTextMode = readerMode === "paged" && !isPdf;
+  const isPagedTextMode = !isPdf;
   const documentStyle = {
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
@@ -858,28 +730,10 @@ function ReaderView({
     () => buildReadingScopeIndex(book.sections),
     [book.sections],
   );
-  const { pages: pagedPages, firstPageIndexBySection } = useMemo(
+  const { pages: pagedPages } = useMemo(
     () => paginateSections(book.sections, settings),
     [book.sections, settings],
   );
-  const tocItems = useMemo<TocItem[]>(() => {
-    if (isPdf) {
-      return Array.from({ length: book.pdf?.pageCount ?? 0 }, (_, index) => ({
-        id: `page-${index + 1}`,
-        label: `第 ${index + 1} 页`,
-        meta: String(index + 1),
-        pageNumber: index + 1,
-      }));
-    }
-
-    return book.sections.map((section, index) => ({
-      id: section.id,
-      label: section.heading || `第 ${index + 1} 节`,
-      meta: section.label || String(index + 1),
-      pageIndex: firstPageIndexBySection[section.id],
-    }));
-  }, [book.pdf?.pageCount, book.sections, firstPageIndexBySection, isPdf]);
-  const activeTocItem = tocItems.find((item) => item.id === activeTocItemId) ?? null;
   const paragraphRangeByKey = useMemo(
     () =>
       new Map(
@@ -986,7 +840,7 @@ function ReaderView({
       });
       setNarrativeResult(result);
     } catch (error) {
-      setNarrativeResult(buildDemoNarrativeJson(scope));
+      setNarrativeResult(buildFallbackNarrativeJson(scope));
       setNarrativeError(
         error instanceof Error
           ? `${error.message} Showing local demo graph instead.`
@@ -1009,37 +863,6 @@ function ReaderView({
   useEffect(() => {
     progressRef.current = progress;
   }, [progress]);
-
-  const syncActiveTocItem = useCallback(() => {
-    const stage = stageRef.current;
-    if (!stage || isPagedTextMode) return;
-
-    const nodes = Array.from(
-      stage.querySelectorAll<HTMLElement>(isPdf ? "[data-page-number]" : "[data-section-id]"),
-    );
-    if (nodes.length === 0) return;
-
-    const anchorY = stage.getBoundingClientRect().top + Math.min(stage.clientHeight * 0.28, 180);
-    let nextActiveId =
-      (isPdf ? nodes[0]?.dataset.pageNumber && `page-${nodes[0].dataset.pageNumber}` : nodes[0]?.dataset.sectionId) ??
-      "";
-
-    for (const node of nodes) {
-      const rect = node.getBoundingClientRect();
-      const candidateId =
-        isPdf ? node.dataset.pageNumber && `page-${node.dataset.pageNumber}` : node.dataset.sectionId;
-      if (!candidateId) continue;
-      if (rect.top <= anchorY) {
-        nextActiveId = candidateId;
-        continue;
-      }
-      break;
-    }
-
-    if (nextActiveId) {
-      setActiveTocItemId((current) => (current === nextActiveId ? current : nextActiveId));
-    }
-  }, [isPagedTextMode, isPdf]);
 
   const saveCurrentProgress = useCallback(() => {
     const stage = stageRef.current;
@@ -1078,15 +901,11 @@ function ReaderView({
   const handleScroll = useCallback(() => {
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(() => {
-      const stage = stageRef.current;
-      if (stage) {
-        syncActiveTocItem();
-      }
       updateNarrativeDebugVisibility();
       saveCurrentProgress();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress, syncActiveTocItem, updateNarrativeDebugVisibility]);
+  }, [saveCurrentProgress, updateNarrativeDebugVisibility]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
     if (isPagedTextMode) {
@@ -1109,38 +928,6 @@ function ReaderView({
       behavior: "smooth",
     });
   }, []);
-
-  const jumpToTocItem = useCallback(
-    (item: TocItem) => {
-      const stage = stageRef.current;
-      if (isPagedTextMode && item.pageIndex !== undefined) {
-        setCurrentPageIndex(item.pageIndex);
-        setTocOpen(false);
-        return;
-      }
-
-      if (!stage) return;
-
-      const selector =
-        item.pageNumber !== undefined
-          ? `[data-page-number="${item.pageNumber}"]`
-          : `[data-toc-anchor-for="${item.id}"], [data-section-id="${item.id}"]`;
-      const target = stage.querySelector<HTMLElement>(selector);
-      if (!target) return;
-
-      const stageRect = stage.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const scrollTop = stage.scrollTop;
-      const relativeTop = targetRect.top - stageRect.top + scrollTop;
-
-      stage.scrollTo({
-        top: Math.max(relativeTop, 0),
-        behavior: "auto",
-      });
-      setTocOpen(false);
-    },
-    [isPagedTextMode],
-  );
 
   useEffect(() => {
     restoringRef.current = true;
@@ -1170,15 +957,6 @@ function ReaderView({
     if (!stage) return;
     stage.scrollTo({ top: 0, behavior: "auto" });
   }, [currentPageIndex, isPagedTextMode]);
-
-  useEffect(() => {
-    if (!isPagedTextMode) return;
-    const nextActiveId =
-      [...tocItems].reverse().find((item) => item.pageIndex !== undefined && item.pageIndex <= currentPageIndex)?.id ??
-      tocItems[0]?.id ??
-      "";
-    setActiveTocItemId((current) => (current === nextActiveId ? current : nextActiveId));
-  }, [currentPageIndex, isPagedTextMode, tocItems]);
 
   useEffect(() => {
     if (!isPagedTextMode || restoringRef.current) return;
@@ -1242,12 +1020,6 @@ function ReaderView({
   }, []);
 
   useEffect(() => {
-    if (isPagedTextMode) return;
-    const animationFrame = window.requestAnimationFrame(syncActiveTocItem);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [book.id, isPagedTextMode, progress, readerMode, settings.fontScale, settings.lineHeight, syncActiveTocItem]);
-
-  useEffect(() => {
     const animationFrame = window.requestAnimationFrame(updateNarrativeDebugVisibility);
     return () => window.cancelAnimationFrame(animationFrame);
   }, [
@@ -1256,16 +1028,8 @@ function ReaderView({
     narrativeError,
     narrativeResult,
     narrativeScope,
-    readerMode,
     updateNarrativeDebugVisibility,
   ]);
-
-  useEffect(() => {
-    if (!tocOpen || !activeTocItemId) return;
-    const activeItem = tocItemRefs.current[activeTocItemId];
-    if (!activeItem) return;
-    activeItem.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [activeTocItemId, tocOpen]);
 
   const setFontScale = (delta: number) => {
     onSettingsChange({
@@ -1289,114 +1053,29 @@ function ReaderView({
     >
       <header className="reader-topbar">
         <div className="reader-left-tools">
-          <button
-            className="icon-button reader-nav-button reader-nav-home"
-            type="button"
-            onClick={onBack}
-            aria-label="返回书库"
-            title="返回书库"
-          >
-            <ArrowLeft size={21} strokeWidth={2.2} />
-          </button>
-          <div className="toc-wrap">
+          <div className="reader-primary-nav">
             <button
-              className={`icon-button reader-nav-button reader-nav-notes${tocOpen ? " active" : ""}`}
+              className="icon-button reader-nav-button reader-nav-home"
+              type="button"
+              onClick={onBack}
+              aria-label="返回书库"
+              title="返回书库"
+            >
+              <ArrowLeft size={21} strokeWidth={2.2} />
+            </button>
+            <button
+              className={`icon-button reader-nav-button reader-nav-mode${modeOpen ? " active" : ""}`}
               type="button"
               onClick={() => {
-                setTocOpen((open) => !open);
+                setModeOpen((open) => !open);
                 setSettingsOpen(false);
-                setPagesOpen(false);
-                setModeOpen(false);
               }}
-              aria-label="打开目录"
-              title="目录"
+              aria-label="Mode"
+              title="Mode"
             >
-              <List size={20} strokeWidth={2.2} />
+              <Sparkles size={20} strokeWidth={2.2} />
             </button>
-            {tocOpen && (
-              <div className="toc-popover">
-                <div className="toc-header">
-                  <span>目录</span>
-                  {activeTocItem && <strong>{activeTocItem.label}</strong>}
-                </div>
-                <div className="toc-list">
-                  {tocItems.map((item) => (
-                    <button
-                      className={`toc-item${item.id === activeTocItemId ? " active" : ""}`}
-                      key={item.id}
-                      type="button"
-                      ref={(node) => {
-                        tocItemRefs.current[item.id] = node;
-                      }}
-                      onClick={() => jumpToTocItem(item)}
-                      aria-current={item.id === activeTocItemId ? "location" : undefined}
-                    >
-                      <span>{item.label}</span>
-                      <strong>{item.meta}</strong>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-          <button
-            className={`icon-button reader-nav-button reader-nav-pages${pagesOpen ? " active" : ""}`}
-            type="button"
-            onClick={() => {
-              setPagesOpen((open) => !open);
-              setTocOpen(false);
-              setSettingsOpen(false);
-              setModeOpen(false);
-            }}
-            aria-label="Pages"
-            title="Pages"
-          >
-            <FileText size={20} strokeWidth={2.2} />
-          </button>
-          {pagesOpen && (
-            <div className="reader-pages-panel">
-              <button
-                className={`reader-mode-button${readerMode === "scroll" ? " active" : ""}`}
-                type="button"
-                onClick={() => {
-                  setReaderMode("scroll");
-                  setPagesOpen(false);
-                }}
-                aria-label="滚动阅读模式"
-                title="滚动阅读"
-              >
-                <List size={16} strokeWidth={2.2} />
-                <span>scroll</span>
-              </button>
-              <button
-                className={`reader-mode-button${readerMode === "paged" ? " active" : ""}`}
-                type="button"
-                onClick={() => {
-                  setReaderMode("paged");
-                  setPagesOpen(false);
-                }}
-                aria-label="翻页阅读模式"
-                title="翻页阅读"
-              >
-                <BookOpen size={16} strokeWidth={2.2} />
-                <span>paged</span>
-              </button>
-            </div>
-          )}
-          <button
-            className={`icon-button reader-nav-button reader-nav-mode${modeOpen ? " active" : ""}`}
-            type="button"
-            onClick={() => {
-              setModeOpen((open) => !open);
-              setTocOpen(false);
-              setPagesOpen(false);
-              setSettingsOpen(false);
-            }}
-            aria-label="Mode"
-            title="Mode"
-          >
-            <Sparkles size={20} strokeWidth={2.2} />
-          </button>
           {modeOpen && (
             <div className="reader-ai-panel">
               <button
@@ -1457,8 +1136,6 @@ function ReaderView({
             className="icon-button reader-nav-button reader-nav-json"
             type="button"
             onClick={() => {
-              setTocOpen(false);
-              setPagesOpen(false);
               setSettingsOpen(false);
               setModeOpen(false);
               void handleExtractNarrativeJson();
@@ -1493,8 +1170,6 @@ function ReaderView({
             type="button"
             onClick={() => {
               setSettingsOpen((open) => !open);
-              setTocOpen(false);
-              setPagesOpen(false);
               setModeOpen(false);
             }}
             aria-label="打开排版设置"
@@ -1574,18 +1249,10 @@ function ReaderView({
 
       {isNarrativeMapFullscreen && (
         <section className="reader-narrative-fullscreen" aria-label="完整叙事可视化">
-          <header>
-            <div>
-              <span>当前阅读范围</span>
-              <strong>事件 · 地点</strong>
-            </div>
-            <button type="button" onClick={() => setIsNarrativeMapFullscreen(false)} aria-label="关闭完整视图">
-              关闭 ×
-            </button>
-          </header>
           <SidebarEventTimeline
             characters={narrativeResult?.characters ?? []}
             events={narrativeResult?.events ?? []}
+            onClose={() => setIsNarrativeMapFullscreen(false)}
             showDemoWhenEmpty={false}
             variant="fullscreen"
           />
