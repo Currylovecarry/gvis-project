@@ -710,6 +710,7 @@ function ReaderView({
   const frameRef = useRef<number | null>(null);
   const progressRef = useRef(progress);
   const restoringRef = useRef(true);
+  const lastHighAutoUpdateRef = useRef<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [isLowVisualizationsRevealed, setIsLowVisualizationsRevealed] = useState(false);
@@ -968,6 +969,31 @@ function ReaderView({
 
     return () => window.clearTimeout(timer);
   }, [aiMode, book.id, readingProgress, shouldSyncProgressiveNarrative]);
+
+  useEffect(() => {
+    if (aiMode !== "high") {
+      lastHighAutoUpdateRef.current = null;
+    }
+  }, [aiMode, book.id]);
+
+  useEffect(() => {
+    if (aiMode !== "high" || isProgressiveDemo || isPdf) return;
+    if (isExtractingNarrative) return;
+
+    const scope = getCurrentStoryScope();
+    if (!scope.text.trim()) return;
+
+    const scopeKey = `${book.id}:${scope.endIndex}`;
+    if (lastHighAutoUpdateRef.current === scopeKey) return;
+
+    const timer = window.setTimeout(() => {
+      if (lastHighAutoUpdateRef.current === scopeKey) return;
+      lastHighAutoUpdateRef.current = scopeKey;
+      void handleExtractNarrativeJson(scope);
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [aiMode, book.id, getCurrentStoryScope, handleExtractNarrativeJson, isExtractingNarrative, isPdf, isProgressiveDemo, readingProgress]);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -1235,6 +1261,7 @@ function ReaderView({
           </div>
           {!isZeroMode && (
             <>
+              {aiMode !== "high" && (
               <div className="reader-ai-action">
                 <button
                   className="icon-button reader-nav-button reader-nav-json"
@@ -1268,13 +1295,16 @@ function ReaderView({
                   </span>
                 )}
               </div>
-              {isProgressiveDemo && (
+              )}
+              {(isProgressiveDemo || aiMode === "high") && (
                 <p className="reader-live-narrative-status" aria-live="polite">
-                  {isNarrativeSyncing
+                  {isNarrativeSyncing || isExtractingNarrative
                     ? "整理刚读到的内容…"
                     : aiMode === "low"
                       ? `点击 AI 更新至 ${formatPercent(readingProgress)}`
-                      : `故事线已同步至 ${formatPercent(readingProgress)}`}
+                      : aiMode === "high"
+                        ? `AI 自动同步至 ${formatPercent(readingProgress)}`
+                        : `故事线已同步至 ${formatPercent(readingProgress)}`}
                 </p>
               )}
               {!isNarrativeDebugVisible && (
