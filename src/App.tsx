@@ -36,7 +36,7 @@ import { SidebarCharacterRelations } from "./components/CharacterGraph";
 import { SidebarEventTimeline } from "./components/EventTimeline";
 import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
 import { Book, BookFormat, getBookTextStats } from "./data/books";
-import { DEMO_NARRATIVES } from "./data/demoNarratives";
+import { DEMO_NARRATIVES, getProgressiveDemoNarrative } from "./data/demoNarratives";
 import type { NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
@@ -719,6 +719,7 @@ function ReaderView({
   const [isExtractingNarrative, setIsExtractingNarrative] = useState(false);
   const [isNarrativeDebugVisible, setIsNarrativeDebugVisible] = useState(false);
   const [isNarrativeMapFullscreen, setIsNarrativeMapFullscreen] = useState(false);
+  const [isNarrativeSyncing, setIsNarrativeSyncing] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = !isPdf;
@@ -734,6 +735,12 @@ function ReaderView({
     () => paginateSections(book.sections, settings),
     [book.sections, settings],
   );
+  const isProgressiveDemo = getProgressiveDemoNarrative(book.id, 0) !== null;
+  const readingProgress = isPagedTextMode
+    ? pagedPages.length <= 1
+      ? 0
+      : currentPageIndex / (pagedPages.length - 1)
+    : progress;
   const paragraphRangeByKey = useMemo(
     () =>
       new Map(
@@ -858,7 +865,23 @@ function ReaderView({
     setIsExtractingNarrative(false);
     setIsNarrativeDebugVisible(false);
     setIsNarrativeMapFullscreen(false);
+    setIsNarrativeSyncing(false);
   }, [book.id]);
+
+  useEffect(() => {
+    if (!isProgressiveDemo) return;
+
+    setIsNarrativeSyncing(true);
+    const timer = window.setTimeout(() => {
+      const result = getProgressiveDemoNarrative(book.id, readingProgress);
+      setNarrativeScope(null);
+      setNarrativeResult(result);
+      setNarrativeError("");
+      setIsNarrativeSyncing(false);
+    }, 480);
+
+    return () => window.clearTimeout(timer);
+  }, [book.id, isProgressiveDemo, readingProgress]);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -1140,12 +1163,17 @@ function ReaderView({
               setModeOpen(false);
               void handleExtractNarrativeJson();
             }}
-            disabled={isExtractingNarrative}
-            aria-label="抽取叙事 JSON"
-            title="Extract Narrative JSON"
+            disabled={isExtractingNarrative || isProgressiveDemo}
+            aria-label={isProgressiveDemo ? "故事线会随阅读自动更新" : "抽取叙事 JSON"}
+            title={isProgressiveDemo ? "故事线随阅读自动更新" : "Extract Narrative JSON"}
           >
             <BrainCircuit size={20} strokeWidth={2.2} />
           </button>
+          {isProgressiveDemo && (
+            <p className="reader-live-narrative-status" aria-live="polite">
+              {isNarrativeSyncing ? "整理刚读到的内容…" : `故事线已同步至 ${formatPercent(readingProgress)}`}
+            </p>
+          )}
           {!isNarrativeDebugVisible && (
             <SidebarEventTimeline
               characters={narrativeResult?.characters ?? []}
@@ -1280,7 +1308,7 @@ function ReaderView({
         ) : (
           <TextDocumentView book={book} documentStyle={documentStyle} />
         )}
-        {(narrativeScope || narrativeResult || narrativeError || isExtractingNarrative) && (
+        {!isProgressiveDemo && (narrativeScope || narrativeResult || narrativeError || isExtractingNarrative) && (
           <div className="narrative-debug-anchor" ref={narrativeDebugRef}>
             <NarrativeDebugPanel
               error={narrativeError}

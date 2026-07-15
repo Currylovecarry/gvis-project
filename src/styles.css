@@ -1155,6 +1155,15 @@ button {
   padding: 4px 0 0 10px;
 }
 
+.reader-live-narrative-status {
+  width: 168px;
+  margin: -8px 0 -4px;
+  color: var(--reader-muted);
+  font-family: var(--reader-hand-cn);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .reader-sidebar-timeline {
   width: clamp(250px, calc(100vw - 952px), 300px);
   margin-top: 18px;
@@ -1238,7 +1247,8 @@ button {
 
 .event-map-variant-sidebar .event-map-scroll {
   max-height: none;
-  overflow: hidden auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 7px;
   touch-action: pan-x;
   cursor: grab;

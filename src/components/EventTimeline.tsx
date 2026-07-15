@@ -193,7 +193,11 @@ export function SidebarEventTimeline({
   const sourceEvents = isDemo ? DEMO_EVENTS : events;
   const sourceCharacters = isDemo ? DEMO_CHARACTERS : characters;
   const mapScrollRef = useRef<HTMLDivElement>(null);
-  const swipeStartXRef = useRef<number | null>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startScrollLeft: number;
+  } | null>(null);
   const orderedEvents = useMemo(
     () => normalizeEvents(sourceEvents).sort((first, second) => first.order - second.order) as VisualEvent[],
     [sourceEvents],
@@ -227,7 +231,25 @@ export function SidebarEventTimeline({
   useEffect(() => {
     const viewport = mapScrollRef.current;
     if (!viewport || variant !== "sidebar") return;
-    viewport.scrollLeft = viewport.scrollWidth;
+
+    const latestCore = viewport.querySelector<SVGCircleElement>(
+      '[data-latest-event-core="true"]',
+    );
+    if (!latestCore) return;
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const coreRect = latestCore.getBoundingClientRect();
+    const latestCenter = viewport.scrollLeft + coreRect.left - viewportRect.left + coreRect.width / 2;
+    const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    const nextScrollLeft = Math.min(
+      Math.max(0, latestCenter - viewport.clientWidth / 2),
+      maxScrollLeft,
+    );
+
+    viewport.scrollTo({
+      left: nextScrollLeft,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
   }, [orderedEvents, variant]);
 
   const scrollEvents = (direction: -1 | 1) => {
@@ -243,6 +265,7 @@ export function SidebarEventTimeline({
 
   const labelWidth = variant === "sidebar" ? 16 : 88;
   const eventSpacing = variant === "sidebar" ? 160 : 150;
+  const sidebarCanvasInset = variant === "sidebar" ? 160 : 0;
   const locationGap = variant === "demo" ? 14 : variant === "sidebar" ? 8 : 24;
   const minimumChartWidth = variant === "sidebar" ? 250 : 330;
   const summaryCharactersPerLine = variant === "sidebar" ? 8 : SUMMARY_CHARACTERS_PER_LINE;
@@ -252,7 +275,7 @@ export function SidebarEventTimeline({
   const chartWidth = Math.max(
     minimumChartWidth,
     labelWidth + (variant === "sidebar" ? 72 : 120) + Math.max(displayedEvents.length - 1, 0) * eventSpacing,
-  );
+  ) + sidebarCanvasInset * 2;
   const locationLayouts = locations.map((location) => {
     const locationEvents = displayedEvents.filter((event) => event.location === location);
     const top = Math.max(
@@ -284,7 +307,7 @@ export function SidebarEventTimeline({
       ? lastLocation.y + lastLocation.bottom + 18
       : 120;
   const positionFor = (event: VisualEvent, index: number) => ({
-    x: labelWidth + (variant === "sidebar" ? 36 : 28) + index * eventSpacing,
+    x: sidebarCanvasInset + labelWidth + (variant === "sidebar" ? 36 : 28) + index * eventSpacing,
     y: variant === "sidebar" ? 54 : locationY.get(event.location) ?? 48,
   });
   const connectorPath = displayedEvents
@@ -344,22 +367,29 @@ export function SidebarEventTimeline({
         className="event-map-scroll"
         ref={mapScrollRef}
         onPointerDown={(event) => {
-          if (variant !== "sidebar") return;
-          swipeStartXRef.current = event.clientX;
+          if (variant !== "sidebar" || event.button !== 0) return;
+          dragStateRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startScrollLeft: event.currentTarget.scrollLeft,
+          };
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
+        onPointerMove={(event) => {
+          const dragState = dragStateRef.current;
+          if (variant !== "sidebar" || !dragState || dragState.pointerId !== event.pointerId) return;
+          event.currentTarget.scrollLeft = dragState.startScrollLeft - (event.clientX - dragState.startX);
+        }}
         onPointerUp={(event) => {
-          if (variant !== "sidebar" || swipeStartXRef.current === null) return;
-          const distance = event.clientX - swipeStartXRef.current;
-          swipeStartXRef.current = null;
+          const dragState = dragStateRef.current;
+          if (variant !== "sidebar" || !dragState || dragState.pointerId !== event.pointerId) return;
+          dragStateRef.current = null;
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
-          if (distance < -36) scrollEvents(-1);
-          if (distance > 36) scrollEvents(1);
         }}
         onPointerCancel={(event) => {
-          swipeStartXRef.current = null;
+          dragStateRef.current = null;
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
@@ -414,6 +444,7 @@ export function SidebarEventTimeline({
                   cx={x}
                   cy={y}
                   r={radius}
+                  data-latest-event-core={index === displayedEvents.length - 1 ? "true" : undefined}
                   onPointerEnter={(pointerEvent) =>
                     setHoveredEvent({ description: displayDescription, x: pointerEvent.clientX, y: pointerEvent.clientY })
                   }

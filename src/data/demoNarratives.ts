@@ -1,4 +1,8 @@
-import type { Character, Event as NarrativeEvent } from "../types/narrative";
+import type {
+  Character,
+  Event as NarrativeEvent,
+  NarrativeJsonResponse,
+} from "../types/narrative";
 
 export type DemoNarrative = {
   id: string;
@@ -101,3 +105,57 @@ export const DEMO_NARRATIVES: DemoNarrative[] = [
     ],
   },
 ];
+
+/**
+ * Local progressive-reading fixtures for the four preloaded EPUBs.
+ * Each threshold is a reader progress watermark, not knowledge about a later
+ * event: the event is simply absent from the UI until its watermark is reached.
+ */
+const PROGRESSIVE_DEMO_CONFIG: Record<string, { narrativeId: string; revealPoints: number[] }> = {
+  "the-gift-of-the-magi": {
+    narrativeId: "fortune-and-love",
+    revealPoints: [0, 0.12, 0.27, 0.43, 0.61, 0.78, 0.92],
+  },
+  "tobin-s-palm": {
+    narrativeId: "tobins-palm",
+    revealPoints: [0, 0.1, 0.22, 0.35, 0.48, 0.61, 0.74, 0.88],
+  },
+  "the-shamrock-and-the-palm": {
+    narrativeId: "the-sham",
+    revealPoints: [0, 0.1, 0.23, 0.36, 0.49, 0.62, 0.75, 0.88],
+  },
+  "maggie-appears": {
+    narrativeId: "maggie-appears",
+    revealPoints: [0, 0.1, 0.23, 0.36, 0.49, 0.62, 0.75, 0.88],
+  },
+};
+
+export function getProgressiveDemoNarrative(
+  bookId: string,
+  readingProgress: number,
+): NarrativeJsonResponse | null {
+  const config = PROGRESSIVE_DEMO_CONFIG[bookId];
+  if (!config) return null;
+
+  const story = DEMO_NARRATIVES.find((narrative) => narrative.id === config.narrativeId);
+  if (!story) return null;
+
+  const boundedProgress = Math.min(Math.max(readingProgress, 0), 1);
+  const visibleEvents = story.events.filter(
+    (_, index) => boundedProgress >= config.revealPoints[index],
+  );
+  const visibleCharacterIds = new Set(
+    visibleEvents.flatMap((event) => event.characters),
+  );
+
+  return {
+    story_title: story.title,
+    range: {
+      startIndex: 0,
+      endIndex: Math.round(boundedProgress * 10_000),
+    },
+    characters: story.characters.filter((character) => visibleCharacterIds.has(character.id)),
+    events: visibleEvents,
+    relations: [],
+  };
+}
