@@ -18,6 +18,7 @@ type SidebarEventTimelineProps = {
   onExpand?: () => void;
   onClose?: () => void;
   showDemoWhenEmpty?: boolean;
+  obscured?: boolean;
 };
 
 type VisualEvent = NarrativeEvent & {
@@ -188,6 +189,7 @@ export function SidebarEventTimeline({
   onExpand,
   onClose,
   showDemoWhenEmpty = true,
+  obscured = false,
 }: SidebarEventTimelineProps) {
   const isDemo = showDemoWhenEmpty && events.length === 0;
   const sourceEvents = isDemo ? DEMO_EVENTS : events;
@@ -318,7 +320,7 @@ export function SidebarEventTimeline({
     .join(" ");
 
   return (
-    <aside className={`reader-sidebar-timeline event-map-variant-${variant}`} aria-label="事件地点图">
+    <aside className={`reader-sidebar-timeline event-map-variant-${variant}${obscured ? " visual-gated" : ""}`} aria-label="事件地点图">
       <div className="event-map-heading">
         {variant !== "fullscreen" && (
           <div className="event-map-heading-copy">

@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ArrowRight,
   BookOpen,
   BrainCircuit,
   CircleOff,
@@ -711,6 +712,8 @@ function ReaderView({
   const restoringRef = useRef(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiMode, setAiMode] = useState<AiMode>("zero");
+  const [isLowVisualizationsRevealed, setIsLowVisualizationsRevealed] = useState(false);
+  const [isLowRefreshRequested, setIsLowRefreshRequested] = useState(false);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [narrativeScope, setNarrativeScope] = useState<CurrentStoryScope | null>(null);
   const [narrativeResult, setNarrativeResult] = useState<NarrativeJsonResponse | null>(null);
@@ -723,6 +726,8 @@ function ReaderView({
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = !isPdf;
+  const isZeroMode = aiMode === "zero";
+  const areVisualizationsObscured = aiMode === "low" && !isLowVisualizationsRevealed;
   const documentStyle = {
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
@@ -736,6 +741,8 @@ function ReaderView({
     [book.sections, settings],
   );
   const isProgressiveDemo = getProgressiveDemoNarrative(book.id, 0) !== null;
+  const shouldSyncProgressiveNarrative =
+    isProgressiveDemo && !isZeroMode && (aiMode !== "low" || isLowRefreshRequested);
   const readingProgress = isPagedTextMode
     ? pagedPages.length <= 1
       ? 0
@@ -825,8 +832,18 @@ function ReaderView({
     readingScopeIndex.fullText,
   ]);
 
-  const handleExtractNarrativeJson = useCallback(async () => {
-    const scope = getCurrentStoryScope();
+  const getStoryScopeThroughParagraph = useCallback((sectionId: string, paragraphIndex: number) => {
+    const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
+    if (!paragraphRange) return null;
+
+    return getCurrentStoryTextUntilPage(
+      readingScopeIndex.fullText,
+      paragraphRange.endIndex,
+      readingScopeIndex.chapters,
+    );
+  }, [paragraphRangeByKey, readingScopeIndex.chapters, readingScopeIndex.fullText]);
+
+  const handleExtractNarrativeJson = useCallback(async (scope = getCurrentStoryScope()) => {
     setNarrativeScope(scope);
     setNarrativeResult(null);
 
@@ -858,6 +875,66 @@ function ReaderView({
     }
   }, [getCurrentStoryScope]);
 
+  const handleParagraphAiExtract = useCallback((sectionId: string, paragraphIndex: number) => {
+    const scope = getStoryScopeThroughParagraph(sectionId, paragraphIndex);
+    if (!scope) return;
+
+    setSettingsOpen(false);
+    setIsLowVisualizationsRevealed(true);
+
+    if (isProgressiveDemo) {
+      setNarrativeScope(scope);
+      setNarrativeResult(
+        getProgressiveDemoNarrative(book.id, scope.endIndex / Math.max(readingScopeIndex.fullText.length, 1)),
+      );
+      setNarrativeError("");
+      return;
+    }
+
+    void handleExtractNarrativeJson(scope);
+  }, [book.id, getStoryScopeThroughParagraph, handleExtractNarrativeJson, isProgressiveDemo, readingScopeIndex.fullText.length]);
+
+  const handleLowAiExtractAtButton = useCallback((button: HTMLButtonElement) => {
+    const stage = stageRef.current;
+    const paragraphNodes = stage
+      ? Array.from(stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"))
+      : [];
+    const buttonRect = button.getBoundingClientRect();
+    const buttonCenterY = buttonRect.top + buttonRect.height / 2;
+
+    const targetParagraph = paragraphNodes.reduce<HTMLElement | null>((nearest, node) => {
+      const rect = node.getBoundingClientRect();
+      const distance = buttonCenterY < rect.top
+        ? rect.top - buttonCenterY
+        : buttonCenterY > rect.bottom
+          ? buttonCenterY - rect.bottom
+          : 0;
+
+      if (!nearest) return node;
+      const nearestRect = nearest.getBoundingClientRect();
+      const nearestDistance = buttonCenterY < nearestRect.top
+        ? nearestRect.top - buttonCenterY
+        : buttonCenterY > nearestRect.bottom
+          ? buttonCenterY - nearestRect.bottom
+          : 0;
+      return distance < nearestDistance ? node : nearest;
+    }, null);
+
+    const sectionId = targetParagraph?.dataset.sectionId;
+    const paragraphIndex = Number(targetParagraph?.dataset.paragraphIndex);
+    if (sectionId && Number.isFinite(paragraphIndex)) {
+      handleParagraphAiExtract(sectionId, paragraphIndex);
+      return;
+    }
+
+    setIsLowVisualizationsRevealed(true);
+    if (isProgressiveDemo) {
+      setIsLowRefreshRequested(true);
+    } else {
+      void handleExtractNarrativeJson();
+    }
+  }, [handleExtractNarrativeJson, handleParagraphAiExtract, isProgressiveDemo]);
+
   useEffect(() => {
     setNarrativeScope(null);
     setNarrativeResult(null);
@@ -867,10 +944,17 @@ function ReaderView({
     setIsNarrativeMapFullscreen(false);
     setIsCharacterGraphFullscreen(false);
     setIsNarrativeSyncing(false);
+    setIsLowRefreshRequested(false);
   }, [book.id]);
 
   useEffect(() => {
-    if (!isProgressiveDemo) return;
+    if (aiMode !== "low") return;
+    setIsLowVisualizationsRevealed(false);
+    setIsLowRefreshRequested(false);
+  }, [aiMode, readingProgress]);
+
+  useEffect(() => {
+    if (!shouldSyncProgressiveNarrative) return;
 
     setIsNarrativeSyncing(true);
     const timer = window.setTimeout(() => {
@@ -879,10 +963,11 @@ function ReaderView({
       setNarrativeResult(result);
       setNarrativeError("");
       setIsNarrativeSyncing(false);
+      if (aiMode === "low") setIsLowRefreshRequested(false);
     }, 480);
 
     return () => window.clearTimeout(timer);
-  }, [book.id, isProgressiveDemo, readingProgress]);
+  }, [aiMode, book.id, readingProgress, shouldSyncProgressiveNarrative]);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -1070,6 +1155,16 @@ function ReaderView({
     onSettingsChange({ ...settings, theme });
   };
 
+  const selectAiMode = (mode: AiMode) => {
+    setAiMode(mode);
+    setIsLowVisualizationsRevealed(mode !== "low");
+    setIsLowRefreshRequested(false);
+    if (mode === "zero" || mode === "low") {
+      setIsNarrativeMapFullscreen(false);
+      setIsCharacterGraphFullscreen(false);
+    }
+  };
+
   return (
     <section
       className={`reader-screen theme-${settings.theme}`}
@@ -1093,7 +1188,7 @@ function ReaderView({
                 className={`reader-mode-button${aiMode === "zero" ? " active" : ""}`}
                 type="button"
                 onClick={() => {
-                  setAiMode("zero");
+                  selectAiMode("zero");
                 }}
                 aria-label="Zero AI mode"
                 title="Zero"
@@ -1105,7 +1200,7 @@ function ReaderView({
                 className={`reader-mode-button${aiMode === "low" ? " active" : ""}`}
                 type="button"
                 onClick={() => {
-                  setAiMode("low");
+                  selectAiMode("low");
                 }}
                 aria-label="Low AI mode"
                 title="Low"
@@ -1117,7 +1212,7 @@ function ReaderView({
                 className={`reader-mode-button${aiMode === "medium" ? " active" : ""}`}
                 type="button"
                 onClick={() => {
-                  setAiMode("medium");
+                  selectAiMode("medium");
                 }}
                 aria-label="Medium AI mode"
                 title="Medium"
@@ -1129,7 +1224,7 @@ function ReaderView({
                 className={`reader-mode-button${aiMode === "high" ? " active" : ""}`}
                 type="button"
                 onClick={() => {
-                  setAiMode("high");
+                  selectAiMode("high");
                 }}
                 aria-label="High AI mode"
                 title="High"
@@ -1138,34 +1233,63 @@ function ReaderView({
                 <span>high</span>
               </button>
           </div>
-          <button
-            className="icon-button reader-nav-button reader-nav-json"
-            type="button"
-            onClick={() => {
-              setSettingsOpen(false);
-              void handleExtractNarrativeJson();
-            }}
-            disabled={isExtractingNarrative || isProgressiveDemo}
-            aria-label={isProgressiveDemo ? "故事线会随阅读自动更新" : "抽取叙事 JSON"}
-            title={isProgressiveDemo ? "故事线随阅读自动更新" : "Extract Narrative JSON"}
-          >
-            <BrainCircuit size={20} strokeWidth={2.2} />
-          </button>
-          {isProgressiveDemo && (
-            <p className="reader-live-narrative-status" aria-live="polite">
-              {isNarrativeSyncing ? "整理刚读到的内容…" : `故事线已同步至 ${formatPercent(readingProgress)}`}
-            </p>
-          )}
-          {!isNarrativeDebugVisible && (
-            <SidebarEventTimeline
-              characters={narrativeResult?.characters ?? []}
-              events={narrativeResult?.events ?? []}
-              onExpand={() => {
-                setIsCharacterGraphFullscreen(false);
-                setIsNarrativeMapFullscreen(true);
-              }}
-              showDemoWhenEmpty={false}
-            />
+          {!isZeroMode && (
+            <>
+              <div className="reader-ai-action">
+                <button
+                  className="icon-button reader-nav-button reader-nav-json"
+                  type="button"
+                  onClick={(event) => {
+                    setSettingsOpen(false);
+                    if (aiMode === "low") {
+                      handleLowAiExtractAtButton(event.currentTarget);
+                      return;
+                    }
+                    setIsLowVisualizationsRevealed(true);
+                    if (!isProgressiveDemo) {
+                      void handleExtractNarrativeJson();
+                    }
+                  }}
+                  disabled={isExtractingNarrative}
+                  aria-label={
+                    isProgressiveDemo && aiMode === "low"
+                      ? "更新当前阅读进度的故事线"
+                      : isProgressiveDemo
+                        ? "故事线会随阅读自动更新"
+                        : "抽取叙事 JSON"
+                  }
+                  title={isProgressiveDemo && aiMode === "low" ? "更新故事线" : isProgressiveDemo ? "故事线随阅读自动更新" : "Extract Narrative JSON"}
+                >
+                  <BrainCircuit size={20} strokeWidth={2.2} />
+                </button>
+                {aiMode === "low" && (
+                  <span className="reader-ai-cursor" aria-hidden="true">
+                    <ArrowRight size={19} strokeWidth={2.1} />
+                  </span>
+                )}
+              </div>
+              {isProgressiveDemo && (
+                <p className="reader-live-narrative-status" aria-live="polite">
+                  {isNarrativeSyncing
+                    ? "整理刚读到的内容…"
+                    : aiMode === "low"
+                      ? `点击 AI 更新至 ${formatPercent(readingProgress)}`
+                      : `故事线已同步至 ${formatPercent(readingProgress)}`}
+                </p>
+              )}
+              {!isNarrativeDebugVisible && (
+                <SidebarEventTimeline
+                  characters={narrativeResult?.characters ?? []}
+                  events={narrativeResult?.events ?? []}
+                  onExpand={() => {
+                    setIsCharacterGraphFullscreen(false);
+                    setIsNarrativeMapFullscreen(true);
+                  }}
+                  showDemoWhenEmpty={false}
+                  obscured={areVisualizationsObscured}
+                />
+              )}
+            </>
           )}
         </div>
 
@@ -1257,9 +1381,10 @@ function ReaderView({
         </div>
       </header>
 
-      {!isNarrativeDebugVisible && (
+      {!isZeroMode && !isNarrativeDebugVisible && (
         <SidebarCharacterRelations
           result={narrativeResult}
+          obscured={areVisualizationsObscured}
           onExpand={() => {
             setIsNarrativeMapFullscreen(false);
             setIsCharacterGraphFullscreen(true);
@@ -1267,7 +1392,7 @@ function ReaderView({
         />
       )}
 
-      {isNarrativeMapFullscreen && (
+      {!isZeroMode && isNarrativeMapFullscreen && (
         <section className="reader-narrative-fullscreen" aria-label="完整叙事可视化">
           <SidebarEventTimeline
             characters={narrativeResult?.characters ?? []}
@@ -1279,7 +1404,7 @@ function ReaderView({
         </section>
       )}
 
-      {isCharacterGraphFullscreen && (
+      {!isZeroMode && isCharacterGraphFullscreen && (
         <section className="reader-narrative-fullscreen reader-character-graph-fullscreen" aria-label="完整人物关系图">
           <CharacterGraph result={narrativeResult} onClose={() => setIsCharacterGraphFullscreen(false)} />
         </section>
@@ -1304,9 +1429,12 @@ function ReaderView({
             pages={pagedPages}
           />
         ) : (
-          <TextDocumentView book={book} documentStyle={documentStyle} />
+          <TextDocumentView
+            book={book}
+            documentStyle={documentStyle}
+          />
         )}
-        {!isProgressiveDemo && (narrativeScope || narrativeResult || narrativeError || isExtractingNarrative) && (
+        {!isZeroMode && !isProgressiveDemo && (narrativeScope || narrativeResult || narrativeError || isExtractingNarrative) && (
           <div className="narrative-debug-anchor" ref={narrativeDebugRef}>
             <NarrativeDebugPanel
               error={narrativeError}

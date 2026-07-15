@@ -10,6 +10,7 @@ type CharacterGraphProps = {
 type SidebarCharacterRelationsProps = {
   result: NarrativeJsonResponse | null;
   onExpand?: () => void;
+  obscured?: boolean;
 };
 
 type RelationEdge = {
@@ -222,7 +223,7 @@ export function CharacterGraph({ result, onClose }: CharacterGraphProps) {
   );
 }
 
-export function SidebarCharacterRelations({ result, onExpand }: SidebarCharacterRelationsProps) {
+export function SidebarCharacterRelations({ result, onExpand, obscured = false }: SidebarCharacterRelationsProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -271,7 +272,7 @@ export function SidebarCharacterRelations({ result, onExpand }: SidebarCharacter
   if (!result || graph.characters.length === 0) return null;
 
   return (
-    <aside className="reader-side-relations" aria-label="人物关系图">
+    <aside className={`reader-side-relations${obscured ? " visual-gated" : ""}`} aria-label="人物关系图">
       <header className="reader-side-relations-header">
         <div>
           <h2>人物关系</h2>

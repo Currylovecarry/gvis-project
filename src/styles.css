@@ -1165,6 +1165,7 @@ button {
 }
 
 .reader-sidebar-timeline {
+  position: relative;
   width: clamp(250px, calc(100vw - 952px), 300px);
   margin-top: 18px;
   color: var(--reader-ink);
@@ -1526,6 +1527,32 @@ button {
 
 .reader-side-relations::-webkit-scrollbar {
   display: none;
+}
+
+.visual-gated::after {
+  position: absolute;
+  inset: -6px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  color: var(--reader-ink);
+  background: rgba(252, 252, 250, 0.58);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  font-family: var(--reader-hand-cn);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  content: "点击 AI 查看叙事";
+}
+
+.visual-gated {
+  border-radius: 20px;
+}
+
+.reader-side-relations.visual-gated {
+  overflow: visible;
 }
 
 .reader-side-relations-header {
@@ -2191,8 +2218,32 @@ button {
 }
 
 .reader-copy p {
+  position: relative;
   margin: 0 0 18px;
   overflow-wrap: anywhere;
+}
+
+.reader-ai-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0;
+}
+
+.reader-ai-cursor {
+  position: absolute;
+  top: 50%;
+  left: clamp(136px, calc(11vw + 28px), 186px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  color: #657440;
+  background: transparent;
+  border: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .section-divider {
@@ -3172,6 +3223,16 @@ button {
     margin-top: 0;
     flex-wrap: nowrap;
     flex-shrink: 0;
+  }
+
+  .reader-ai-action {
+    margin-left: 0;
+  }
+
+  .reader-ai-cursor {
+    position: static;
+    margin-left: 6px;
+    transform: none;
   }
 
   .reader-primary-nav {
