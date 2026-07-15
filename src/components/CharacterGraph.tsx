@@ -1,13 +1,15 @@
-import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from "cytoscape";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Character, NarrativeJsonResponse, Relation } from "../types/narrative";
 
 type CharacterGraphProps = {
   result: NarrativeJsonResponse | null;
+  onClose?: () => void;
 };
 
 type SidebarCharacterRelationsProps = {
   result: NarrativeJsonResponse | null;
+  onExpand?: () => void;
 };
 
 type RelationEdge = {
@@ -42,7 +44,7 @@ const relationColors: Record<RelationEdge["type"], string> = {
   co_occurrence: "#b7ad9f",
 };
 
-export function CharacterGraph({ result }: CharacterGraphProps) {
+export function CharacterGraph({ result, onClose }: CharacterGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -185,17 +187,24 @@ export function CharacterGraph({ result }: CharacterGraphProps) {
           <h3>人物关系图</h3>
           <p>{graph.characters.length} 个角色 · {graph.edges.length} 条关系</p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const cy = cyRef.current;
-            if (!cy) return;
-            cy.layout({ name: "cose", animate: false, padding: 56 }).run();
-            cy.fit(undefined, 56);
-          }}
-        >
-          整理
-        </button>
+        <div className="character-graph-actions">
+          <button
+            type="button"
+            onClick={() => {
+              const cy = cyRef.current;
+              if (!cy) return;
+              cy.layout({ name: "cose", animate: false, padding: 56 }).run();
+              cy.fit(undefined, 56);
+            }}
+          >
+            整理
+          </button>
+          {onClose && (
+            <button type="button" className="character-graph-close" onClick={onClose} aria-label="关闭人物关系图">
+              关闭 ×
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="character-graph-shell">
@@ -213,74 +222,130 @@ export function CharacterGraph({ result }: CharacterGraphProps) {
   );
 }
 
-export function SidebarCharacterRelations({ result }: SidebarCharacterRelationsProps) {
+export function SidebarCharacterRelations({ result, onExpand }: SidebarCharacterRelationsProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cyRef = useRef<Core | null>(null);
+  const [selectedId, setSelectedId] = useState("");
   const graph = useMemo(() => buildGraph(result), [result]);
-  const nodes = useMemo(
-    () =>
-      graph.characters.map((character, index) => ({
-        character,
-        color: characterColor(index),
-        position: sidebarGraphPosition(index, graph.characters.length),
-      })),
-    [graph.characters],
-  );
-  const nodeById = useMemo(
-    () => new Map(nodes.map((node) => [node.character.id, node])),
-    [nodes],
-  );
+  const selectedCharacter = graph.characters.find((character) => character.id === selectedId) ?? graph.characters[0];
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || graph.elements.length === 0) return;
+
+    const cy = cytoscape({
+      container,
+      elements: graph.elements,
+      minZoom: 0.55,
+      maxZoom: 2.2,
+      wheelSensitivity: 0.16,
+      style: sidebarGraphStyle,
+      layout: sidebarLayout,
+    });
+
+    cyRef.current = cy;
+    setSelectedId((current) => current || graph.characters[0]?.id || "");
+    cy.on("tap", "node", (event) => setSelectedId(event.target.id()));
+
+    const resizeObserver = new ResizeObserver(() => {
+      cy.resize();
+      cy.fit(undefined, 24);
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+      cy.destroy();
+      cyRef.current = null;
+    };
+  }, [graph]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !selectedId) return;
+    cy.$("node").unselect();
+    const node = cy.$id(selectedId);
+    if (!node.empty()) node.select();
+  }, [selectedId]);
 
   if (!result || graph.characters.length === 0) return null;
 
   return (
-    <aside className="reader-side-relations" aria-label="人物关系">
-      <div className="reader-side-graph" role="img" aria-label="人物关系迷你图">
-        <svg className="reader-side-graph-lines" viewBox="0 0 100 100" aria-hidden="true">
-          {graph.edges.map((edge) => {
-            const source = nodeById.get(edge.source);
-            const target = nodeById.get(edge.target);
-            if (!source || !target) return null;
-
-            const labelX = (source.position.x + target.position.x) / 2;
-            const labelY = (source.position.y + target.position.y) / 2;
-
-            return (
-              <g className="reader-side-graph-edge" key={edge.id}>
-                <line
-                  x1={source.position.x}
-                  y1={source.position.y}
-                  x2={target.position.x}
-                  y2={target.position.y}
-                  stroke={relationColors[edge.type]}
-                  strokeDasharray={edge.inferred ? "3 3" : undefined}
-                />
-                <text x={labelX} y={labelY}>
-                  {edge.label}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-
-        {nodes.map(({ character, color, position }) => (
-          <article
-            className="reader-side-graph-node"
-            key={character.id || character.name}
-            style={
-              {
-                "--character-color": color,
-                "--node-x": `${position.x}%`,
-                "--node-y": `${position.y}%`,
-              } as CSSProperties
-            }
+    <aside className="reader-side-relations" aria-label="人物关系图">
+      <header className="reader-side-relations-header">
+        <div>
+          <h2>人物关系</h2>
+          <p>{graph.characters.length} 人 · {graph.edges.length} 条关系</p>
+        </div>
+        <div className="reader-side-relations-actions">
+          {onExpand && (
+            <button type="button" onClick={onExpand} aria-label="展开人物关系图" title="展开">
+              展开
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              const cy = cyRef.current;
+              if (!cy) return;
+              cy.layout({ ...sidebarLayout, animate: true, animationDuration: 220 }).run();
+              cy.fit(undefined, 24);
+            }}
+            aria-label="重新整理人物关系图"
+            title="重新整理"
           >
-            <span aria-hidden="true">{character.name.slice(0, 1)}</span>
-            <strong>{character.name}</strong>
-          </article>
-        ))}
-      </div>
+            整理
+          </button>
+        </div>
+      </header>
+      <div className="reader-side-graph" ref={containerRef} aria-label="可交互人物关系图" />
+      {selectedCharacter && (
+        <div className="reader-side-graph-detail" aria-live="polite">
+          <div>
+            <span>已选人物</span>
+            <strong>{selectedCharacter.name}</strong>
+          </div>
+          {(selectedCharacter.description || selectedCharacter.evidence) && (
+            <p>{selectedCharacter.description || selectedCharacter.evidence}</p>
+          )}
+        </div>
+      )}
     </aside>
   );
 }
+
+const sidebarLayout = {
+  name: "cose" as const,
+  animate: false,
+  componentSpacing: 28,
+  idealEdgeLength: 74,
+  nodeOverlap: 10,
+  padding: 24,
+};
+
+const sidebarGraphStyle: StylesheetJson = [
+  {
+    selector: "node",
+    style: {
+      "background-color": "data(color)", "border-color": "#fcfcfa", "border-width": 2,
+      color: "#35332e", "font-family": "LXGW WenKai, PingFang SC, sans-serif", "font-size": 10,
+      height: "data(size)", label: "data(label)", "overlay-opacity": 0,
+      "text-background-color": "#fcfcfa", "text-background-opacity": 0.9, "text-background-padding": "2px",
+      "text-margin-y": 7, "text-valign": "bottom", width: "data(size)",
+    },
+  },
+  { selector: "node:selected", style: { "border-color": "#778653", "border-width": 3 } },
+  {
+    selector: "edge",
+    style: {
+      "curve-style": "bezier", "font-family": "LXGW WenKai, PingFang SC, sans-serif", "font-size": 8,
+      label: "data(label)", "line-color": "data(color)", opacity: 0.78, "target-arrow-color": "data(color)",
+      "target-arrow-shape": "triangle", "text-background-color": "#fcfcfa", "text-background-opacity": 0.86,
+      "text-background-padding": "1px", "text-rotation": "autorotate", width: "data(width)",
+    },
+  },
+  { selector: "edge[inferred = 'yes']", style: { "line-style": "dashed", "target-arrow-shape": "none", opacity: 0.48 } },
+];
 
 function GraphEmptyState({ title, description }: { title: string; description: string }) {
   return (
@@ -392,36 +457,6 @@ function undirectedKey(source: string, target: string) {
 function characterColor(index: number) {
   const colors = ["#b8c79a", "#d0b98e", "#bfa7a0", "#9eb9b0", "#c5b6d4", "#d4a999"];
   return colors[index % colors.length];
-}
-
-function sidebarGraphPosition(index: number, total: number) {
-  const presets: Array<Array<{ x: number; y: number }>> = [
-    [],
-    [{ x: 50, y: 50 }],
-    [
-      { x: 34, y: 48 },
-      { x: 66, y: 48 },
-    ],
-    [
-      { x: 50, y: 24 },
-      { x: 27, y: 68 },
-      { x: 73, y: 68 },
-    ],
-    [
-      { x: 50, y: 18 },
-      { x: 24, y: 46 },
-      { x: 76, y: 46 },
-      { x: 50, y: 78 },
-    ],
-  ];
-
-  if (total < presets.length) return presets[total][index];
-
-  const angle = -Math.PI / 2 + (index / total) * Math.PI * 2;
-  return {
-    x: 50 + Math.cos(angle) * 32,
-    y: 50 + Math.sin(angle) * 32,
-  };
 }
 
 function importanceWeight(importance: "high" | "medium" | "low") {

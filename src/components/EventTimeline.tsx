@@ -484,6 +484,17 @@ export function SidebarEventTimeline({
           <span>{selectedEvent.location} · 事件 {selectedEvent.order}</span>
         </p>
       )}
+      {variant === "sidebar" && (
+        <div className="event-map-legend event-map-sidebar-legend" aria-label="人物图例">
+          <span className="event-map-legend-label">人物</span>
+          {Array.from(characterColors.entries()).map(([id, color]) => (
+            <span key={id}>
+              <i style={{ backgroundColor: color }} aria-hidden="true" />
+              {characterLabels.get(id) ?? id}
+            </span>
+          ))}
+        </div>
+      )}
       {selectedEvent && variant !== "sidebar" && (
         <p className="event-map-detail" aria-live="polite">
           <strong>事件 {selectedEvent.order}</strong>{formatEventDescription(selectedEvent.description)}

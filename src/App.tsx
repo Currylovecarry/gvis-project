@@ -32,7 +32,7 @@ import logo3 from "./assets/logos/31b1e46e-0fe1-4702-936a-bdd805edd20f-178297493
 import logo4 from "./assets/logos/bc34797c-7ded-48bc-87cc-cfcbfe5e204f-1782974934894_IMG_1348.svg";
 import logo5 from "./assets/logos/21ce9ae5-90df-4728-9433-34dee7d13417-1782975463348_Oe_2026-07-02_14.55.33.svg";
 import { extractNarrativeJson } from "./api/narrativeApi";
-import { SidebarCharacterRelations } from "./components/CharacterGraph";
+import { CharacterGraph, SidebarCharacterRelations } from "./components/CharacterGraph";
 import { SidebarEventTimeline } from "./components/EventTimeline";
 import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
 import { Book, BookFormat, getBookTextStats } from "./data/books";
@@ -710,7 +710,6 @@ function ReaderView({
   const progressRef = useRef(progress);
   const restoringRef = useRef(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [modeOpen, setModeOpen] = useState(false);
   const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [narrativeScope, setNarrativeScope] = useState<CurrentStoryScope | null>(null);
@@ -719,6 +718,7 @@ function ReaderView({
   const [isExtractingNarrative, setIsExtractingNarrative] = useState(false);
   const [isNarrativeDebugVisible, setIsNarrativeDebugVisible] = useState(false);
   const [isNarrativeMapFullscreen, setIsNarrativeMapFullscreen] = useState(false);
+  const [isCharacterGraphFullscreen, setIsCharacterGraphFullscreen] = useState(false);
   const [isNarrativeSyncing, setIsNarrativeSyncing] = useState(false);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
@@ -865,6 +865,7 @@ function ReaderView({
     setIsExtractingNarrative(false);
     setIsNarrativeDebugVisible(false);
     setIsNarrativeMapFullscreen(false);
+    setIsCharacterGraphFullscreen(false);
     setIsNarrativeSyncing(false);
   }, [book.id]);
 
@@ -1086,27 +1087,13 @@ function ReaderView({
             >
               <ArrowLeft size={21} strokeWidth={2.2} />
             </button>
-            <button
-              className={`icon-button reader-nav-button reader-nav-mode${modeOpen ? " active" : ""}`}
-              type="button"
-              onClick={() => {
-                setModeOpen((open) => !open);
-                setSettingsOpen(false);
-              }}
-              aria-label="Mode"
-              title="Mode"
-            >
-              <Sparkles size={20} strokeWidth={2.2} />
-            </button>
           </div>
-          {modeOpen && (
-            <div className="reader-ai-panel">
+          <div className="reader-ai-panel">
               <button
                 className={`reader-mode-button${aiMode === "zero" ? " active" : ""}`}
                 type="button"
                 onClick={() => {
                   setAiMode("zero");
-                  setModeOpen(false);
                 }}
                 aria-label="Zero AI mode"
                 title="Zero"
@@ -1119,7 +1106,6 @@ function ReaderView({
                 type="button"
                 onClick={() => {
                   setAiMode("low");
-                  setModeOpen(false);
                 }}
                 aria-label="Low AI mode"
                 title="Low"
@@ -1132,7 +1118,6 @@ function ReaderView({
                 type="button"
                 onClick={() => {
                   setAiMode("medium");
-                  setModeOpen(false);
                 }}
                 aria-label="Medium AI mode"
                 title="Medium"
@@ -1145,7 +1130,6 @@ function ReaderView({
                 type="button"
                 onClick={() => {
                   setAiMode("high");
-                  setModeOpen(false);
                 }}
                 aria-label="High AI mode"
                 title="High"
@@ -1153,14 +1137,12 @@ function ReaderView({
                 <BrainCircuit size={16} strokeWidth={2.2} />
                 <span>high</span>
               </button>
-            </div>
-          )}
+          </div>
           <button
             className="icon-button reader-nav-button reader-nav-json"
             type="button"
             onClick={() => {
               setSettingsOpen(false);
-              setModeOpen(false);
               void handleExtractNarrativeJson();
             }}
             disabled={isExtractingNarrative || isProgressiveDemo}
@@ -1178,7 +1160,10 @@ function ReaderView({
             <SidebarEventTimeline
               characters={narrativeResult?.characters ?? []}
               events={narrativeResult?.events ?? []}
-              onExpand={() => setIsNarrativeMapFullscreen(true)}
+              onExpand={() => {
+                setIsCharacterGraphFullscreen(false);
+                setIsNarrativeMapFullscreen(true);
+              }}
               showDemoWhenEmpty={false}
             />
           )}
@@ -1198,7 +1183,6 @@ function ReaderView({
             type="button"
             onClick={() => {
               setSettingsOpen((open) => !open);
-              setModeOpen(false);
             }}
             aria-label="打开排版设置"
             title="排版设置"
@@ -1273,7 +1257,15 @@ function ReaderView({
         </div>
       </header>
 
-      {!isNarrativeDebugVisible && <SidebarCharacterRelations result={narrativeResult} />}
+      {!isNarrativeDebugVisible && (
+        <SidebarCharacterRelations
+          result={narrativeResult}
+          onExpand={() => {
+            setIsNarrativeMapFullscreen(false);
+            setIsCharacterGraphFullscreen(true);
+          }}
+        />
+      )}
 
       {isNarrativeMapFullscreen && (
         <section className="reader-narrative-fullscreen" aria-label="完整叙事可视化">
@@ -1284,6 +1276,12 @@ function ReaderView({
             showDemoWhenEmpty={false}
             variant="fullscreen"
           />
+        </section>
+      )}
+
+      {isCharacterGraphFullscreen && (
+        <section className="reader-narrative-fullscreen reader-character-graph-fullscreen" aria-label="完整人物关系图">
+          <CharacterGraph result={narrativeResult} onClose={() => setIsCharacterGraphFullscreen(false)} />
         </section>
       )}
 
