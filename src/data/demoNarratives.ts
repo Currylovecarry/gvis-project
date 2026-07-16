@@ -169,24 +169,54 @@ export const DEMO_NARRATIVES: DemoNarrative[] = [
  * Each threshold is a reader progress watermark, not knowledge about a later
  * event: the event is simply absent from the UI until its watermark is reached.
  */
-const PROGRESSIVE_DEMO_CONFIG: Record<string, { narrativeId: string; revealPoints: number[] }> = {
+type ProgressiveDemoConfig = {
+  narrativeId: string;
+  revealPoints: number[];
+  mediumAutoRevealPoints: Record<string, number>;
+};
+
+export type ProgressiveDemoMilestone = {
+  eventId: string;
+  revealPoint: number;
+};
+
+const PROGRESSIVE_DEMO_CONFIG: Record<string, ProgressiveDemoConfig> = {
   "the-gift-of-the-magi": {
     narrativeId: "fortune-and-love",
     revealPoints: [0, 0.12, 0.27, 0.43, 0.61, 0.78, 0.92],
+    mediumAutoRevealPoints: { f1: 0.06, f4: 0.43, f5: 0.61 },
   },
   "tobin-s-palm": {
     narrativeId: "tobins-palm",
     revealPoints: [0, 0.1, 0.22, 0.35, 0.48, 0.61, 0.74, 0.88],
+    mediumAutoRevealPoints: { t1: 0.05, t5: 0.48, t7: 0.74 },
   },
   "the-shamrock-and-the-palm": {
     narrativeId: "the-sham",
     revealPoints: [0, 0.1, 0.23, 0.36, 0.49, 0.62, 0.75, 0.88],
+    mediumAutoRevealPoints: { s1: 0.05, s2: 0.1, s7: 0.75 },
   },
   "the-brief-debut-of-tildy": {
     narrativeId: "the-brief-debut-of-tildy",
     revealPoints: [0, 0.14, 0.35, 0.47, 0.55, 0.72, 0.8, 0.9],
+    mediumAutoRevealPoints: { b1: 0.07, b4: 0.47, b6: 0.72 },
   },
 };
+
+export function getMediumAutoRevealMilestones(bookId: string): ProgressiveDemoMilestone[] {
+  const config = PROGRESSIVE_DEMO_CONFIG[bookId];
+  if (!config) return [];
+
+  const story = DEMO_NARRATIVES.find((narrative) => narrative.id === config.narrativeId);
+  if (!story) return [];
+
+  return story.events.flatMap((event) => {
+    const revealPoint = config.mediumAutoRevealPoints[event.id];
+    return Number.isFinite(revealPoint)
+      ? [{ eventId: event.id, revealPoint }]
+      : [];
+  });
+}
 
 export function getProgressiveDemoNarrative(
   bookId: string,

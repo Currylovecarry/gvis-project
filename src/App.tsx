@@ -37,7 +37,11 @@ import { CharacterGraph, SidebarCharacterRelations } from "./components/Characte
 import { SidebarEventTimeline } from "./components/EventTimeline";
 import { NarrativeDebugPanel } from "./components/NarrativeDebugPanel";
 import { Book, BookFormat, getBookTextStats } from "./data/books";
-import { DEMO_NARRATIVES, getProgressiveDemoNarrative } from "./data/demoNarratives";
+import {
+  DEMO_NARRATIVES,
+  getMediumAutoRevealMilestones,
+  getProgressiveDemoNarrative,
+} from "./data/demoNarratives";
 import type { NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
@@ -712,10 +716,11 @@ function ReaderView({
   const progressRef = useRef(progress);
   const restoringRef = useRef(true);
   const lastHighAutoUpdateRef = useRef<string | null>(null);
+  const previousMediumMarkerProgressRef = useRef<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiMode, setAiMode] = useState<AiMode>("zero");
-  const [isLowVisualizationsRevealed, setIsLowVisualizationsRevealed] = useState(false);
-  const [isLowRefreshRequested, setIsLowRefreshRequested] = useState(false);
+  const [areManualVisualizationsRevealed, setAreManualVisualizationsRevealed] = useState(false);
+  const [isManualRefreshRequested, setIsManualRefreshRequested] = useState(false);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [narrativeScope, setNarrativeScope] = useState<CurrentStoryScope | null>(null);
   const [narrativeResult, setNarrativeResult] = useState<NarrativeJsonResponse | null>(null);
@@ -725,12 +730,15 @@ function ReaderView({
   const [isNarrativeMapFullscreen, setIsNarrativeMapFullscreen] = useState(false);
   const [isCharacterGraphFullscreen, setIsCharacterGraphFullscreen] = useState(false);
   const [isNarrativeSyncing, setIsNarrativeSyncing] = useState(false);
+  const [mediumMarkerEndIndex, setMediumMarkerEndIndex] = useState(0);
   const [highMarkerEndIndex, setHighMarkerEndIndex] = useState(0);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = !isPdf;
   const isZeroMode = aiMode === "zero";
-  const areVisualizationsObscured = aiMode === "low" && !isLowVisualizationsRevealed;
+  const isManualNarrativeMode = aiMode === "low" || aiMode === "medium";
+  const areVisualizationsObscured =
+    isManualNarrativeMode && !areManualVisualizationsRevealed;
   const documentStyle = {
     "--reader-font-scale": settings.fontScale,
     "--reader-line-height": settings.lineHeight,
@@ -744,9 +752,12 @@ function ReaderView({
     [book.sections, settings],
   );
   const isProgressiveDemo = getProgressiveDemoNarrative(book.id, 0) !== null;
+  const mediumAutoRevealMilestones = useMemo(
+    () => getMediumAutoRevealMilestones(book.id),
+    [book.id],
+  );
   const shouldSyncProgressiveNarrative =
-    isProgressiveDemo &&
-    (aiMode === "medium" || (aiMode === "low" && isLowRefreshRequested));
+    isProgressiveDemo && isManualNarrativeMode && isManualRefreshRequested;
   const readingProgress = isPagedTextMode
     ? pagedPages.length <= 1
       ? 0
@@ -773,6 +784,17 @@ function ReaderView({
     const paragraphRange = paragraphRangeByKey.get(`${lastItem.sectionId}:${lastParagraphIndex}`);
 
     return paragraphRange?.endIndex ?? 0;
+  }, [currentPageIndex, pagedPages, paragraphRangeByKey]);
+
+  const getPagedPageStartIndex = useCallback(() => {
+    const page = pagedPages[currentPageIndex];
+    const firstItem = page?.items[0];
+    if (!firstItem) return 0;
+
+    const paragraphRange = paragraphRangeByKey.get(
+      `${firstItem.sectionId}:${firstItem.startParagraphIndex}`,
+    );
+    return paragraphRange?.startIndex ?? 0;
   }, [currentPageIndex, pagedPages, paragraphRangeByKey]);
 
   const getScrollPageEndIndex = useCallback(() => {
@@ -836,17 +858,6 @@ function ReaderView({
     readingScopeIndex.fullText,
   ]);
 
-  const getStoryScopeThroughParagraph = useCallback((sectionId: string, paragraphIndex: number) => {
-    const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
-    if (!paragraphRange) return null;
-
-    return getCurrentStoryTextUntilPage(
-      readingScopeIndex.fullText,
-      paragraphRange.endIndex,
-      readingScopeIndex.chapters,
-    );
-  }, [paragraphRangeByKey, readingScopeIndex.chapters, readingScopeIndex.fullText]);
-
   const getStoryScopeAtAiMarker = useCallback((anchor: HTMLElement | null) => {
     const stage = stageRef.current;
     if (!stage || !anchor) return getCurrentStoryScope();
@@ -857,30 +868,46 @@ function ReaderView({
     const anchorRect = anchor.getBoundingClientRect();
     const markerY = anchorRect.top + anchorRect.height / 2;
 
-    const targetParagraph = paragraphNodes.reduce<HTMLElement | null>((nearest, node) => {
+    let markerEndIndex = 0;
+    for (const node of paragraphNodes) {
+      const sectionId = node.dataset.sectionId;
+      const paragraphIndex = Number(node.dataset.paragraphIndex);
+      if (!sectionId || !Number.isFinite(paragraphIndex)) continue;
+
+      const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
+      if (!paragraphRange) continue;
+
       const rect = node.getBoundingClientRect();
-      const distance = markerY < rect.top
-        ? rect.top - markerY
-        : markerY > rect.bottom
-          ? markerY - rect.bottom
-          : 0;
+      if (markerY <= rect.top) {
+        markerEndIndex = markerEndIndex || paragraphRange.startIndex;
+        break;
+      }
 
-      if (!nearest) return node;
-      const nearestRect = nearest.getBoundingClientRect();
-      const nearestDistance = markerY < nearestRect.top
-        ? nearestRect.top - markerY
-        : markerY > nearestRect.bottom
-          ? markerY - nearestRect.bottom
-          : 0;
-      return distance < nearestDistance ? node : nearest;
-    }, null);
+      if (markerY >= rect.bottom) {
+        markerEndIndex = paragraphRange.endIndex;
+        continue;
+      }
 
-    const sectionId = targetParagraph?.dataset.sectionId;
-    const paragraphIndex = Number(targetParagraph?.dataset.paragraphIndex);
-    return sectionId && Number.isFinite(paragraphIndex)
-      ? getStoryScopeThroughParagraph(sectionId, paragraphIndex)
-      : getCurrentStoryScope();
-  }, [getCurrentStoryScope, getStoryScopeThroughParagraph]);
+      const paragraphLength = paragraphRange.endIndex - paragraphRange.startIndex;
+      const markerRatio = rect.height <= 0
+        ? 0
+        : clamp((markerY - rect.top) / rect.height, 0, 1);
+      markerEndIndex = paragraphRange.startIndex + Math.floor(paragraphLength * markerRatio);
+      break;
+    }
+
+    if (markerEndIndex <= 0) return getCurrentStoryScope();
+    return getCurrentStoryTextUntilPage(
+      readingScopeIndex.fullText,
+      markerEndIndex,
+      readingScopeIndex.chapters,
+    );
+  }, [
+    getCurrentStoryScope,
+    paragraphRangeByKey,
+    readingScopeIndex.chapters,
+    readingScopeIndex.fullText,
+  ]);
 
   const handleExtractNarrativeJson = useCallback(async (scope = getCurrentStoryScope()) => {
     setNarrativeScope(scope);
@@ -917,11 +944,11 @@ function ReaderView({
   const handleAiExtractAtMarker = useCallback((anchor: HTMLButtonElement) => {
     const scope = getStoryScopeAtAiMarker(anchor);
     setSettingsOpen(false);
-    if (aiMode === "low") setIsLowVisualizationsRevealed(true);
+    if (isManualNarrativeMode) setAreManualVisualizationsRevealed(true);
 
     if (!scope?.text.trim()) {
-      setIsLowVisualizationsRevealed(true);
-      if (isProgressiveDemo) setIsLowRefreshRequested(true);
+      setAreManualVisualizationsRevealed(true);
+      if (isProgressiveDemo) setIsManualRefreshRequested(true);
       else void handleExtractNarrativeJson();
       return;
     }
@@ -947,6 +974,7 @@ function ReaderView({
     book.id,
     getStoryScopeAtAiMarker,
     handleExtractNarrativeJson,
+    isManualNarrativeMode,
     isProgressiveDemo,
     readingScopeIndex.fullText.length,
   ]);
@@ -960,15 +988,24 @@ function ReaderView({
     setIsNarrativeMapFullscreen(false);
     setIsCharacterGraphFullscreen(false);
     setIsNarrativeSyncing(false);
-    setIsLowRefreshRequested(false);
+    setAreManualVisualizationsRevealed(false);
+    setIsManualRefreshRequested(false);
+    setMediumMarkerEndIndex(0);
     setHighMarkerEndIndex(0);
+    previousMediumMarkerProgressRef.current = null;
   }, [book.id]);
 
   useEffect(() => {
     if (aiMode !== "low") return;
-    setIsLowVisualizationsRevealed(false);
-    setIsLowRefreshRequested(false);
+    setAreManualVisualizationsRevealed(false);
+    setIsManualRefreshRequested(false);
   }, [aiMode, readingProgress]);
+
+  useEffect(() => {
+    if (aiMode !== "medium") return;
+    setAreManualVisualizationsRevealed(false);
+    setIsManualRefreshRequested(false);
+  }, [aiMode, currentPageIndex]);
 
   useEffect(() => {
     if (!shouldSyncProgressiveNarrative) return;
@@ -980,11 +1017,66 @@ function ReaderView({
       setNarrativeResult(result);
       setNarrativeError("");
       setIsNarrativeSyncing(false);
-      if (aiMode === "low") setIsLowRefreshRequested(false);
+      setIsManualRefreshRequested(false);
     }, 480);
 
     return () => window.clearTimeout(timer);
-  }, [aiMode, book.id, readingProgress, shouldSyncProgressiveNarrative]);
+  }, [book.id, readingProgress, shouldSyncProgressiveNarrative]);
+
+  useEffect(() => {
+    if (aiMode !== "medium") {
+      previousMediumMarkerProgressRef.current = null;
+      setMediumMarkerEndIndex(0);
+      return;
+    }
+    if (isPdf || mediumMarkerEndIndex <= 0) return;
+
+    const markerProgress = mediumMarkerEndIndex / Math.max(readingScopeIndex.fullText.length, 1);
+    const previousProgress = previousMediumMarkerProgressRef.current;
+    previousMediumMarkerProgressRef.current = markerProgress;
+
+    // The automatic reveal is tied to the text position indicated by the
+    // arrow, not to entering a page. On first observation, only inspect the
+    // part of the current page that is already above the arrow.
+    const detectionStart = previousProgress ?? (
+      getPagedPageStartIndex() / Math.max(readingScopeIndex.fullText.length, 1)
+      - Number.EPSILON
+    );
+
+    setIsManualRefreshRequested(false);
+    if (markerProgress <= detectionStart) return;
+
+    const reachedMilestones = mediumAutoRevealMilestones.filter(
+      (milestone) =>
+        milestone.revealPoint > detectionStart &&
+        milestone.revealPoint <= markerProgress,
+    );
+    if (!reachedMilestones.length) return;
+
+    const result = getProgressiveDemoNarrative(book.id, markerProgress);
+    if (!result) return;
+
+    setNarrativeScope(
+      getCurrentStoryTextUntilPage(
+        readingScopeIndex.fullText,
+        mediumMarkerEndIndex,
+        readingScopeIndex.chapters,
+      ),
+    );
+    setNarrativeResult(result);
+    setNarrativeError("");
+    setIsNarrativeSyncing(false);
+    setAreManualVisualizationsRevealed(true);
+  }, [
+    aiMode,
+    book.id,
+    getPagedPageStartIndex,
+    isPdf,
+    mediumMarkerEndIndex,
+    mediumAutoRevealMilestones,
+    readingScopeIndex.chapters,
+    readingScopeIndex.fullText,
+  ]);
 
   useEffect(() => {
     if (aiMode !== "high") {
@@ -1041,16 +1133,20 @@ function ReaderView({
     readingScopeIndex.fullText,
   ]);
 
-  const updateHighMarkerPosition = useCallback(() => {
-    if (aiMode !== "high" || isPdf) return;
+  const updateAiMarkerPosition = useCallback(() => {
+    if ((aiMode !== "medium" && aiMode !== "high") || isPdf) return;
     const scope = getStoryScopeAtAiMarker(aiMarkerRef.current);
     if (!scope?.text.trim()) return;
+    if (aiMode === "medium") {
+      setMediumMarkerEndIndex((current) => current === scope.endIndex ? current : scope.endIndex);
+      return;
+    }
     setHighMarkerEndIndex((current) => current === scope.endIndex ? current : scope.endIndex);
   }, [aiMode, getStoryScopeAtAiMarker, isPdf]);
 
   useEffect(() => {
-    if (aiMode !== "high" || isPdf) return;
-    const animationFrame = window.requestAnimationFrame(updateHighMarkerPosition);
+    if ((aiMode !== "medium" && aiMode !== "high") || isPdf) return;
+    const animationFrame = window.requestAnimationFrame(updateAiMarkerPosition);
     return () => window.cancelAnimationFrame(animationFrame);
   }, [
     aiMode,
@@ -1058,7 +1154,7 @@ function ReaderView({
     isPdf,
     settings.fontScale,
     settings.lineHeight,
-    updateHighMarkerPosition,
+    updateAiMarkerPosition,
   ]);
 
   useEffect(() => {
@@ -1104,10 +1200,10 @@ function ReaderView({
     frameRef.current = window.requestAnimationFrame(() => {
       updateNarrativeDebugVisibility();
       saveCurrentProgress();
-      updateHighMarkerPosition();
+      updateAiMarkerPosition();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress, updateHighMarkerPosition, updateNarrativeDebugVisibility]);
+  }, [saveCurrentProgress, updateAiMarkerPosition, updateNarrativeDebugVisibility]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
     if (isPagedTextMode) {
@@ -1250,9 +1346,12 @@ function ReaderView({
 
   const selectAiMode = (mode: AiMode) => {
     setAiMode(mode);
-    setIsLowVisualizationsRevealed(mode !== "low");
-    setIsLowRefreshRequested(false);
-    if (mode === "zero" || mode === "low") {
+    const isManualMode = mode === "low" || mode === "medium";
+    setAreManualVisualizationsRevealed(!isManualMode);
+    setIsManualRefreshRequested(false);
+    previousMediumMarkerProgressRef.current = null;
+    if (mode !== "medium") setMediumMarkerEndIndex(0);
+    if (mode === "zero" || isManualMode) {
       setIsNarrativeMapFullscreen(false);
       setIsCharacterGraphFullscreen(false);
     }
@@ -1335,11 +1434,11 @@ function ReaderView({
                   type="button"
                   onClick={(event) => {
                     setSettingsOpen(false);
-                    if (aiMode === "low" || aiMode === "high") {
+                    if (isManualNarrativeMode || aiMode === "high") {
                       handleAiExtractAtMarker(event.currentTarget);
                       return;
                     }
-                    setIsLowVisualizationsRevealed(true);
+                    setAreManualVisualizationsRevealed(true);
                     if (!isProgressiveDemo) {
                       void handleExtractNarrativeJson();
                     }
@@ -1348,7 +1447,7 @@ function ReaderView({
                   aria-label={
                     aiMode === "high"
                       ? "立即同步到箭头所指位置"
-                      : isProgressiveDemo && aiMode === "low"
+                      : isProgressiveDemo && isManualNarrativeMode
                       ? "更新当前阅读进度的故事线"
                       : isProgressiveDemo
                         ? "故事线会随阅读自动更新"
@@ -1357,7 +1456,7 @@ function ReaderView({
                   title={
                     aiMode === "high"
                       ? "立即同步到箭头处"
-                      : isProgressiveDemo && aiMode === "low"
+                      : isProgressiveDemo && isManualNarrativeMode
                         ? "更新故事线"
                         : isProgressiveDemo
                           ? "故事线随阅读自动更新"
@@ -1366,7 +1465,7 @@ function ReaderView({
                 >
                   <BrainCircuit size={20} strokeWidth={2.2} />
                 </button>
-                {(aiMode === "low" || aiMode === "high") && (
+                {(isManualNarrativeMode || aiMode === "high") && (
                   <span className="reader-ai-cursor" aria-hidden="true">
                     <ArrowRight size={19} strokeWidth={2.1} />
                   </span>
@@ -1378,8 +1477,10 @@ function ReaderView({
                     ? aiMode === "high"
                       ? "整理箭头处的内容…"
                       : "整理刚读到的内容…"
-                    : aiMode === "low"
-                      ? `点击 AI 更新至 ${formatPercent(readingProgress)}`
+                    : isManualNarrativeMode
+                      ? aiMode === "medium"
+                        ? `点击 AI 更新至箭头处 · 越过关键节点自动显示`
+                        : `点击 AI 更新至 ${formatPercent(readingProgress)}`
                       : aiMode === "high"
                         ? `AI 跟随箭头至 ${formatPercent(
                             readingScopeIndex.fullText.length
