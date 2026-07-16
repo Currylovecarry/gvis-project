@@ -442,6 +442,13 @@ export function SidebarEventTimeline({
                   </text>
                 )}
                 <circle
+                  aria-hidden="true"
+                  className="event-map-connector-cutout"
+                  cx={x}
+                  cy={y}
+                  r={radius + 13}
+                />
+                <circle
                   className="event-map-core"
                   cx={x}
                   cy={y}

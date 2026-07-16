@@ -1337,9 +1337,14 @@ button {
   stroke-width: 1.5;
 }
 
+.event-map-connector-cutout {
+  fill: var(--reader-bg, #fcfcfa);
+  pointer-events: none;
+}
+
 .event-map-core {
-  fill: #999894;
-  stroke: var(--reader-bg);
+  fill: #ffffff;
+  stroke: var(--reader-bg, #fcfcfa);
   stroke-width: 1.5;
   transition: fill 180ms ease;
 }
@@ -1359,7 +1364,7 @@ button {
 .event-map-node:hover .event-map-core,
 .event-map-node.selected .event-map-core,
 .event-map-node:focus .event-map-core {
-  fill: #73726e;
+  fill: #e3e3df;
 }
 
 .event-map-node:focus .event-map-core {
