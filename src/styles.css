@@ -1552,7 +1552,11 @@ button {
 }
 
 .reader-side-relations.visual-gated {
-  overflow: visible;
+  overflow: hidden;
+}
+
+.reader-side-relations.visual-gated::after {
+  inset: 0;
 }
 
 .reader-side-relations-header {

@@ -377,7 +377,7 @@ function buildGraph(result: NarrativeJsonResponse | null) {
         id: relation.id || `${source.id}-${target.id}-${relation.relation_type}`,
         source: source.id,
         target: target.id,
-        label: relationLabels[relation.relation_type] ?? relation.relation_type,
+        label: getRelationLabel(relation),
         type: relation.relation_type,
         confidence: relation.confidence,
         inferred: false,
@@ -388,29 +388,31 @@ function buildGraph(result: NarrativeJsonResponse | null) {
   const relationKeys = new Set(relationEdges.map((edge) => undirectedKey(edge.source, edge.target)));
   const coOccurrenceEdges = new Map<string, RelationEdge>();
 
-  (result?.events ?? []).forEach((event) => {
-    const eventCharacters = event.characters
-      .map((reference) => characterByReference.get(normalizeReference(reference)))
-      .filter((character): character is Character => Boolean(character));
+  if (relationEdges.length === 0) {
+    (result?.events ?? []).forEach((event) => {
+      const eventCharacters = event.characters
+        .map((reference) => characterByReference.get(normalizeReference(reference)))
+        .filter((character): character is Character => Boolean(character));
 
-    for (let sourceIndex = 0; sourceIndex < eventCharacters.length; sourceIndex += 1) {
-      for (let targetIndex = sourceIndex + 1; targetIndex < eventCharacters.length; targetIndex += 1) {
-        const source = eventCharacters[sourceIndex];
-        const target = eventCharacters[targetIndex];
-        const key = undirectedKey(source.id, target.id);
-        if (relationKeys.has(key) || coOccurrenceEdges.has(key)) continue;
-        coOccurrenceEdges.set(key, {
-          id: `co-${key}`,
-          source: source.id,
-          target: target.id,
-          label: relationLabels.co_occurrence,
-          type: "co_occurrence",
-          confidence: importanceWeight(event.importance),
-          inferred: true,
-        });
+      for (let sourceIndex = 0; sourceIndex < eventCharacters.length; sourceIndex += 1) {
+        for (let targetIndex = sourceIndex + 1; targetIndex < eventCharacters.length; targetIndex += 1) {
+          const source = eventCharacters[sourceIndex];
+          const target = eventCharacters[targetIndex];
+          const key = undirectedKey(source.id, target.id);
+          if (relationKeys.has(key) || coOccurrenceEdges.has(key)) continue;
+          coOccurrenceEdges.set(key, {
+            id: `co-${key}`,
+            source: source.id,
+            target: target.id,
+            label: relationLabels.co_occurrence,
+            type: "co_occurrence",
+            confidence: importanceWeight(event.importance),
+            inferred: true,
+          });
+        }
       }
-    }
-  });
+    });
+  }
 
   const edges = [...relationEdges, ...coOccurrenceEdges.values()];
   const degreeByCharacter = new Map<string, number>();
@@ -449,6 +451,14 @@ function buildGraph(result: NarrativeJsonResponse | null) {
 
 function normalizeReference(value: string) {
   return value.trim().toLowerCase();
+}
+
+function getRelationLabel(relation: Relation) {
+  const description = relation.description.trim();
+  if (description && Array.from(description).length <= 12) {
+    return description;
+  }
+  return relationLabels[relation.relation_type] ?? relation.relation_type;
 }
 
 function undirectedKey(source: string, target: string) {

@@ -235,7 +235,7 @@ const preloadedBooks = [
   { path: "/books/财神与爱神 - 未知.epub", id: "the-gift-of-the-magi" },
   { path: "/books/托宾的手相 - 未知.epub", id: "tobin-s-palm" },
   { path: "/books/华而不实 - 未知.epub", id: "the-shamrock-and-the-palm" },
-  { path: "/books/玛吉登场 - 未知.epub", id: "maggie-appears" },
+  { path: "/books/昙花一现 - 未知.epub", id: "the-brief-debut-of-tildy" },
 ];
 
 function App() {
@@ -706,6 +706,7 @@ function ReaderView({
   onSettingsChange,
 }: ReaderViewProps) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const aiMarkerRef = useRef<HTMLButtonElement>(null);
   const narrativeDebugRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const progressRef = useRef(progress);
@@ -724,6 +725,7 @@ function ReaderView({
   const [isNarrativeMapFullscreen, setIsNarrativeMapFullscreen] = useState(false);
   const [isCharacterGraphFullscreen, setIsCharacterGraphFullscreen] = useState(false);
   const [isNarrativeSyncing, setIsNarrativeSyncing] = useState(false);
+  const [highMarkerEndIndex, setHighMarkerEndIndex] = useState(0);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
   const isPagedTextMode = !isPdf;
@@ -743,7 +745,8 @@ function ReaderView({
   );
   const isProgressiveDemo = getProgressiveDemoNarrative(book.id, 0) !== null;
   const shouldSyncProgressiveNarrative =
-    isProgressiveDemo && !isZeroMode && (aiMode !== "low" || isLowRefreshRequested);
+    isProgressiveDemo &&
+    (aiMode === "medium" || (aiMode === "low" && isLowRefreshRequested));
   const readingProgress = isPagedTextMode
     ? pagedPages.length <= 1
       ? 0
@@ -844,6 +847,41 @@ function ReaderView({
     );
   }, [paragraphRangeByKey, readingScopeIndex.chapters, readingScopeIndex.fullText]);
 
+  const getStoryScopeAtAiMarker = useCallback((anchor: HTMLElement | null) => {
+    const stage = stageRef.current;
+    if (!stage || !anchor) return getCurrentStoryScope();
+
+    const paragraphNodes = Array.from(
+      stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"),
+    );
+    const anchorRect = anchor.getBoundingClientRect();
+    const markerY = anchorRect.top + anchorRect.height / 2;
+
+    const targetParagraph = paragraphNodes.reduce<HTMLElement | null>((nearest, node) => {
+      const rect = node.getBoundingClientRect();
+      const distance = markerY < rect.top
+        ? rect.top - markerY
+        : markerY > rect.bottom
+          ? markerY - rect.bottom
+          : 0;
+
+      if (!nearest) return node;
+      const nearestRect = nearest.getBoundingClientRect();
+      const nearestDistance = markerY < nearestRect.top
+        ? nearestRect.top - markerY
+        : markerY > nearestRect.bottom
+          ? markerY - nearestRect.bottom
+          : 0;
+      return distance < nearestDistance ? node : nearest;
+    }, null);
+
+    const sectionId = targetParagraph?.dataset.sectionId;
+    const paragraphIndex = Number(targetParagraph?.dataset.paragraphIndex);
+    return sectionId && Number.isFinite(paragraphIndex)
+      ? getStoryScopeThroughParagraph(sectionId, paragraphIndex)
+      : getCurrentStoryScope();
+  }, [getCurrentStoryScope, getStoryScopeThroughParagraph]);
+
   const handleExtractNarrativeJson = useCallback(async (scope = getCurrentStoryScope()) => {
     setNarrativeScope(scope);
     setNarrativeResult(null);
@@ -876,12 +914,22 @@ function ReaderView({
     }
   }, [getCurrentStoryScope]);
 
-  const handleParagraphAiExtract = useCallback((sectionId: string, paragraphIndex: number) => {
-    const scope = getStoryScopeThroughParagraph(sectionId, paragraphIndex);
-    if (!scope) return;
-
+  const handleAiExtractAtMarker = useCallback((anchor: HTMLButtonElement) => {
+    const scope = getStoryScopeAtAiMarker(anchor);
     setSettingsOpen(false);
-    setIsLowVisualizationsRevealed(true);
+    if (aiMode === "low") setIsLowVisualizationsRevealed(true);
+
+    if (!scope?.text.trim()) {
+      setIsLowVisualizationsRevealed(true);
+      if (isProgressiveDemo) setIsLowRefreshRequested(true);
+      else void handleExtractNarrativeJson();
+      return;
+    }
+
+    if (aiMode === "high") {
+      setHighMarkerEndIndex(scope.endIndex);
+      lastHighAutoUpdateRef.current = `${book.id}:${scope.endIndex}`;
+    }
 
     if (isProgressiveDemo) {
       setNarrativeScope(scope);
@@ -889,52 +937,19 @@ function ReaderView({
         getProgressiveDemoNarrative(book.id, scope.endIndex / Math.max(readingScopeIndex.fullText.length, 1)),
       );
       setNarrativeError("");
+      setIsNarrativeSyncing(false);
       return;
     }
 
     void handleExtractNarrativeJson(scope);
-  }, [book.id, getStoryScopeThroughParagraph, handleExtractNarrativeJson, isProgressiveDemo, readingScopeIndex.fullText.length]);
-
-  const handleLowAiExtractAtButton = useCallback((button: HTMLButtonElement) => {
-    const stage = stageRef.current;
-    const paragraphNodes = stage
-      ? Array.from(stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"))
-      : [];
-    const buttonRect = button.getBoundingClientRect();
-    const buttonCenterY = buttonRect.top + buttonRect.height / 2;
-
-    const targetParagraph = paragraphNodes.reduce<HTMLElement | null>((nearest, node) => {
-      const rect = node.getBoundingClientRect();
-      const distance = buttonCenterY < rect.top
-        ? rect.top - buttonCenterY
-        : buttonCenterY > rect.bottom
-          ? buttonCenterY - rect.bottom
-          : 0;
-
-      if (!nearest) return node;
-      const nearestRect = nearest.getBoundingClientRect();
-      const nearestDistance = buttonCenterY < nearestRect.top
-        ? nearestRect.top - buttonCenterY
-        : buttonCenterY > nearestRect.bottom
-          ? buttonCenterY - nearestRect.bottom
-          : 0;
-      return distance < nearestDistance ? node : nearest;
-    }, null);
-
-    const sectionId = targetParagraph?.dataset.sectionId;
-    const paragraphIndex = Number(targetParagraph?.dataset.paragraphIndex);
-    if (sectionId && Number.isFinite(paragraphIndex)) {
-      handleParagraphAiExtract(sectionId, paragraphIndex);
-      return;
-    }
-
-    setIsLowVisualizationsRevealed(true);
-    if (isProgressiveDemo) {
-      setIsLowRefreshRequested(true);
-    } else {
-      void handleExtractNarrativeJson();
-    }
-  }, [handleExtractNarrativeJson, handleParagraphAiExtract, isProgressiveDemo]);
+  }, [
+    aiMode,
+    book.id,
+    getStoryScopeAtAiMarker,
+    handleExtractNarrativeJson,
+    isProgressiveDemo,
+    readingScopeIndex.fullText.length,
+  ]);
 
   useEffect(() => {
     setNarrativeScope(null);
@@ -946,6 +961,7 @@ function ReaderView({
     setIsCharacterGraphFullscreen(false);
     setIsNarrativeSyncing(false);
     setIsLowRefreshRequested(false);
+    setHighMarkerEndIndex(0);
   }, [book.id]);
 
   useEffect(() => {
@@ -973,27 +989,77 @@ function ReaderView({
   useEffect(() => {
     if (aiMode !== "high") {
       lastHighAutoUpdateRef.current = null;
+      setHighMarkerEndIndex(0);
+      setIsNarrativeSyncing(false);
     }
   }, [aiMode, book.id]);
 
   useEffect(() => {
-    if (aiMode !== "high" || isProgressiveDemo || isPdf) return;
+    if (aiMode !== "high" || isPdf || highMarkerEndIndex <= 0) return;
     if (isExtractingNarrative) return;
 
-    const scope = getCurrentStoryScope();
+    const scope = getCurrentStoryTextUntilPage(
+      readingScopeIndex.fullText,
+      highMarkerEndIndex,
+      readingScopeIndex.chapters,
+    );
     if (!scope.text.trim()) return;
 
     const scopeKey = `${book.id}:${scope.endIndex}`;
     if (lastHighAutoUpdateRef.current === scopeKey) return;
 
+    setIsNarrativeSyncing(true);
     const timer = window.setTimeout(() => {
       if (lastHighAutoUpdateRef.current === scopeKey) return;
       lastHighAutoUpdateRef.current = scopeKey;
+      if (isProgressiveDemo) {
+        setNarrativeScope(scope);
+        setNarrativeResult(
+          getProgressiveDemoNarrative(
+            book.id,
+            scope.endIndex / Math.max(readingScopeIndex.fullText.length, 1),
+          ),
+        );
+        setNarrativeError("");
+        setIsNarrativeSyncing(false);
+        return;
+      }
+      setIsNarrativeSyncing(false);
       void handleExtractNarrativeJson(scope);
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [aiMode, book.id, getCurrentStoryScope, handleExtractNarrativeJson, isExtractingNarrative, isPdf, isProgressiveDemo, readingProgress]);
+  }, [
+    aiMode,
+    book.id,
+    handleExtractNarrativeJson,
+    highMarkerEndIndex,
+    isExtractingNarrative,
+    isPdf,
+    isProgressiveDemo,
+    readingScopeIndex.chapters,
+    readingScopeIndex.fullText,
+  ]);
+
+  const updateHighMarkerPosition = useCallback(() => {
+    if (aiMode !== "high" || isPdf) return;
+    const scope = getStoryScopeAtAiMarker(aiMarkerRef.current);
+    if (!scope?.text.trim()) return;
+    setHighMarkerEndIndex((current) => current === scope.endIndex ? current : scope.endIndex);
+  }, [aiMode, getStoryScopeAtAiMarker, isPdf]);
+
+  useEffect(() => {
+    if (aiMode !== "high" || isPdf) return;
+    const animationFrame = window.requestAnimationFrame(updateHighMarkerPosition);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [
+    aiMode,
+    currentPageIndex,
+    isPdf,
+    settings.fontScale,
+    settings.lineHeight,
+    updateHighMarkerPosition,
+  ]);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -1038,9 +1104,10 @@ function ReaderView({
     frameRef.current = window.requestAnimationFrame(() => {
       updateNarrativeDebugVisibility();
       saveCurrentProgress();
+      updateHighMarkerPosition();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress, updateNarrativeDebugVisibility]);
+  }, [saveCurrentProgress, updateHighMarkerPosition, updateNarrativeDebugVisibility]);
 
   const scrollByPage = useCallback((direction: 1 | -1) => {
     if (isPagedTextMode) {
@@ -1261,15 +1328,15 @@ function ReaderView({
           </div>
           {!isZeroMode && (
             <>
-              {aiMode !== "high" && (
               <div className="reader-ai-action">
                 <button
+                  ref={aiMarkerRef}
                   className="icon-button reader-nav-button reader-nav-json"
                   type="button"
                   onClick={(event) => {
                     setSettingsOpen(false);
-                    if (aiMode === "low") {
-                      handleLowAiExtractAtButton(event.currentTarget);
+                    if (aiMode === "low" || aiMode === "high") {
+                      handleAiExtractAtMarker(event.currentTarget);
                       return;
                     }
                     setIsLowVisualizationsRevealed(true);
@@ -1279,31 +1346,46 @@ function ReaderView({
                   }}
                   disabled={isExtractingNarrative}
                   aria-label={
-                    isProgressiveDemo && aiMode === "low"
+                    aiMode === "high"
+                      ? "立即同步到箭头所指位置"
+                      : isProgressiveDemo && aiMode === "low"
                       ? "更新当前阅读进度的故事线"
                       : isProgressiveDemo
                         ? "故事线会随阅读自动更新"
                         : "抽取叙事 JSON"
                   }
-                  title={isProgressiveDemo && aiMode === "low" ? "更新故事线" : isProgressiveDemo ? "故事线随阅读自动更新" : "Extract Narrative JSON"}
+                  title={
+                    aiMode === "high"
+                      ? "立即同步到箭头处"
+                      : isProgressiveDemo && aiMode === "low"
+                        ? "更新故事线"
+                        : isProgressiveDemo
+                          ? "故事线随阅读自动更新"
+                          : "Extract Narrative JSON"
+                  }
                 >
                   <BrainCircuit size={20} strokeWidth={2.2} />
                 </button>
-                {aiMode === "low" && (
+                {(aiMode === "low" || aiMode === "high") && (
                   <span className="reader-ai-cursor" aria-hidden="true">
                     <ArrowRight size={19} strokeWidth={2.1} />
                   </span>
                 )}
               </div>
-              )}
               {(isProgressiveDemo || aiMode === "high") && (
                 <p className="reader-live-narrative-status" aria-live="polite">
                   {isNarrativeSyncing || isExtractingNarrative
-                    ? "整理刚读到的内容…"
+                    ? aiMode === "high"
+                      ? "整理箭头处的内容…"
+                      : "整理刚读到的内容…"
                     : aiMode === "low"
                       ? `点击 AI 更新至 ${formatPercent(readingProgress)}`
                       : aiMode === "high"
-                        ? `AI 自动同步至 ${formatPercent(readingProgress)}`
+                        ? `AI 跟随箭头至 ${formatPercent(
+                            readingScopeIndex.fullText.length
+                              ? highMarkerEndIndex / readingScopeIndex.fullText.length
+                              : readingProgress,
+                          )}`
                         : `故事线已同步至 ${formatPercent(readingProgress)}`}
                 </p>
               )}
