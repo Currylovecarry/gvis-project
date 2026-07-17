@@ -1977,6 +1977,7 @@ button {
   padding: 104px clamp(24px, 6vw, 96px) 72px 246px;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
   background: var(--reader-bg);
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
@@ -1998,62 +1999,6 @@ button {
 .theme-night .reader-document {
   border-color: transparent;
   box-shadow: none;
-}
-
-.paged-document {
-  display: flex;
-  flex-direction: column;
-  min-height: calc(100dvh - 232px);
-  padding-bottom: 0;
-}
-
-.paged-page {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.paged-document-header {
-  margin-bottom: 66px;
-}
-
-.paged-footer {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  margin-top: 34px;
-  padding: 40px 0 6px;
-  color: var(--reader-muted);
-  border-top: 1px solid rgba(31, 30, 26, 0.08);
-  font-family: var(--reader-hand);
-  font-size: 15px;
-}
-
-.paged-footer span {
-  margin-left: auto;
-}
-
-.paged-turn-button {
-  min-width: 58px;
-  padding: 0 0 4px;
-  color: var(--reader-ink);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid rgba(31, 30, 26, 0.16);
-  font-family: var(--reader-hand);
-  font-size: 16px;
-  cursor: pointer;
-  transition: opacity 0.18s ease;
-}
-
-.paged-turn-button:hover:not(:disabled) {
-  opacity: 0.72;
-}
-
-.paged-turn-button:disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 
 .pdf-document {
@@ -3329,11 +3274,6 @@ button {
     line-height: 1.75;
   }
 
-  .paged-footer {
-    margin-top: 20px;
-    padding-bottom: 8px;
-  }
-
   .document-header {
     margin-bottom: 48px;
   }
@@ -3423,5 +3363,9 @@ button {
 
   .reader-progress-track span {
     transition: none;
+  }
+
+  .reader-stage {
+    scroll-behavior: auto;
   }
 }

@@ -62,19 +62,6 @@ type ReaderSettings = {
   theme: ReaderTheme;
 };
 
-type PagedSection = {
-  sectionId: string;
-  label?: string;
-  heading?: string;
-  paragraphs: string[];
-  startParagraphIndex: number;
-};
-
-type PagedDocumentPage = {
-  id: string;
-  items: PagedSection[];
-};
-
 const progressKey = "gvis-reader-progress";
 const settingsKey = "gvis-reader-settings";
 
@@ -143,93 +130,6 @@ function buildFallbackNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResp
     ],
     events: [],
     relations: [],
-  };
-}
-
-function paginateSections(
-  sections: Book["sections"],
-  settings: ReaderSettings,
-): {
-  pages: PagedDocumentPage[];
-  firstPageIndexBySection: Record<string, number>;
-} {
-  const density = settings.fontScale * (settings.lineHeight / defaultSettings.lineHeight);
-  const targetCharsPerPage = Math.max(420, Math.round(920 / density));
-  const pages: PagedDocumentPage[] = [];
-  const firstPageIndexBySection: Record<string, number> = {};
-
-  let currentPage: PagedDocumentPage = { id: "page-1", items: [] };
-  let currentChars = 0;
-
-  const pushPage = () => {
-    if (!currentPage.items.length) return;
-    pages.push(currentPage);
-    currentPage = { id: `page-${pages.length + 1}`, items: [] };
-    currentChars = 0;
-  };
-
-  sections.forEach((section, sectionIndex) => {
-    let currentItem: PagedSection | null = null;
-    let itemChars = 0;
-    const headingCost = (section.heading?.length ?? 0) + (section.label?.length ?? 0) + 80;
-
-    if (currentPage.items.length > 0) {
-      pushPage();
-    }
-
-    const pushItem = () => {
-      if (!currentItem || !currentItem.paragraphs.length) return;
-      currentPage.items.push(currentItem);
-      currentChars += itemChars;
-      if (firstPageIndexBySection[section.id] === undefined) {
-        firstPageIndexBySection[section.id] = pages.length;
-      }
-      currentItem = null;
-      itemChars = 0;
-    };
-
-    section.paragraphs.forEach((paragraph, paragraphIndex) => {
-      const paragraphCost = Math.max(80, paragraph.length + 32);
-      const needsNewPage =
-        currentChars + itemChars + paragraphCost + (currentItem ? 0 : headingCost) >
-          targetCharsPerPage &&
-        (currentChars > 0 || itemChars > 0);
-
-      if (needsNewPage) {
-        pushItem();
-        pushPage();
-      }
-
-      if (!currentItem) {
-        currentItem = {
-          sectionId: section.id,
-          label: paragraphIndex === 0 ? section.label : undefined,
-          heading: paragraphIndex === 0 ? section.heading : undefined,
-          paragraphs: [],
-          startParagraphIndex: paragraphIndex,
-        };
-        itemChars += headingCost;
-      }
-
-      currentItem.paragraphs.push(paragraph);
-      itemChars += paragraphCost;
-
-      const isLastParagraph = paragraphIndex === section.paragraphs.length - 1;
-      if (isLastParagraph) {
-        pushItem();
-        const isLastSection = sectionIndex === sections.length - 1;
-        if (!isLastSection && currentChars >= targetCharsPerPage * 0.72) {
-          pushPage();
-        }
-      }
-    });
-  });
-
-  pushPage();
-
-  return {
-    pages: pages.length ? pages : [{ id: "page-1", items: [] }],
-    firstPageIndexBySection,
   };
 }
 
@@ -721,7 +621,7 @@ function ReaderView({
   const [aiMode, setAiMode] = useState<AiMode>("zero");
   const [areManualVisualizationsRevealed, setAreManualVisualizationsRevealed] = useState(false);
   const [isManualRefreshRequested, setIsManualRefreshRequested] = useState(false);
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [currentScrollSegment, setCurrentScrollSegment] = useState(0);
   const [narrativeScope, setNarrativeScope] = useState<CurrentStoryScope | null>(null);
   const [narrativeResult, setNarrativeResult] = useState<NarrativeJsonResponse | null>(null);
   const [narrativeError, setNarrativeError] = useState("");
@@ -734,7 +634,6 @@ function ReaderView({
   const [highMarkerEndIndex, setHighMarkerEndIndex] = useState(0);
   const stats = useMemo(() => getBookTextStats(book), [book]);
   const isPdf = book.format === "pdf" && book.pdf;
-  const isPagedTextMode = !isPdf;
   const isZeroMode = aiMode === "zero";
   const isManualNarrativeMode = aiMode === "low" || aiMode === "medium";
   const areVisualizationsObscured =
@@ -747,10 +646,6 @@ function ReaderView({
     () => buildReadingScopeIndex(book.sections),
     [book.sections],
   );
-  const { pages: pagedPages } = useMemo(
-    () => paginateSections(book.sections, settings),
-    [book.sections, settings],
-  );
   const isProgressiveDemo = getProgressiveDemoNarrative(book.id, 0) !== null;
   const mediumAutoRevealMilestones = useMemo(
     () => getMediumAutoRevealMilestones(book.id),
@@ -758,11 +653,7 @@ function ReaderView({
   );
   const shouldSyncProgressiveNarrative =
     isProgressiveDemo && isManualNarrativeMode && isManualRefreshRequested;
-  const readingProgress = isPagedTextMode
-    ? pagedPages.length <= 1
-      ? 0
-      : currentPageIndex / (pagedPages.length - 1)
-    : progress;
+  const readingProgress = progress;
   const paragraphRangeByKey = useMemo(
     () =>
       new Map(
@@ -774,85 +665,83 @@ function ReaderView({
     [readingScopeIndex.paragraphs],
   );
 
-  const getPagedPageEndIndex = useCallback(() => {
-    const page = pagedPages[currentPageIndex];
-    const lastItem = page?.items[page.items.length - 1];
-    if (!lastItem) return 0;
-
-    const lastParagraphIndex =
-      lastItem.startParagraphIndex + Math.max(lastItem.paragraphs.length - 1, 0);
-    const paragraphRange = paragraphRangeByKey.get(`${lastItem.sectionId}:${lastParagraphIndex}`);
-
-    return paragraphRange?.endIndex ?? 0;
-  }, [currentPageIndex, pagedPages, paragraphRangeByKey]);
-
-  const getPagedPageStartIndex = useCallback(() => {
-    const page = pagedPages[currentPageIndex];
-    const firstItem = page?.items[0];
-    if (!firstItem) return 0;
-
-    const paragraphRange = paragraphRangeByKey.get(
-      `${firstItem.sectionId}:${firstItem.startParagraphIndex}`,
-    );
-    return paragraphRange?.startIndex ?? 0;
-  }, [currentPageIndex, pagedPages, paragraphRangeByKey]);
-
-  const getScrollPageEndIndex = useCallback(() => {
+  const getTextIndexAtViewportY = useCallback((viewportY: number) => {
     const stage = stageRef.current;
     if (!stage) return 0;
-
-    const stageRect = stage.getBoundingClientRect();
-    const viewportBottom = stageRect.bottom;
     const paragraphNodes = Array.from(
       stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"),
     );
+    if (!paragraphNodes.length) return 0;
 
-    let lastVisibleEndIndex = 0;
-    for (const node of paragraphNodes) {
-      const rect = node.getBoundingClientRect();
-      if (rect.top > viewportBottom) break;
-      if (rect.bottom < stageRect.top) continue;
-
+    const getRangeForNode = (node: HTMLElement) => {
       const sectionId = node.dataset.sectionId;
       const paragraphIndex = Number(node.dataset.paragraphIndex);
-      if (!sectionId || !Number.isFinite(paragraphIndex)) continue;
+      if (!sectionId || !Number.isFinite(paragraphIndex)) return undefined;
+      return paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
+    };
 
-      const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
-      if (paragraphRange) {
-        if (rect.bottom <= viewportBottom) {
-          lastVisibleEndIndex = paragraphRange.endIndex;
-        } else {
-          const paragraphLength = paragraphRange.endIndex - paragraphRange.startIndex;
-          const visibleRatio = rect.height <= 0 ? 0 : clamp((viewportBottom - rect.top) / rect.height, 0, 1);
-          const visibleLength = Math.max(1, Math.floor(paragraphLength * visibleRatio));
-          lastVisibleEndIndex = clamp(
-            paragraphRange.startIndex + visibleLength,
-            paragraphRange.startIndex,
-            paragraphRange.endIndex,
-          );
-        }
+    let low = 0;
+    let high = paragraphNodes.length - 1;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const node = paragraphNodes[middle];
+      const rect = node.getBoundingClientRect();
+
+      if (viewportY < rect.top) {
+        high = middle - 1;
+        continue;
       }
+      if (viewportY > rect.bottom) {
+        low = middle + 1;
+        continue;
+      }
+
+      const paragraphRange = getRangeForNode(node);
+      if (!paragraphRange) return 0;
+
+      const paragraphLength = paragraphRange.endIndex - paragraphRange.startIndex;
+      const visibleRatio = rect.height <= 0
+        ? 0
+        : clamp((viewportY - rect.top) / rect.height, 0, 1);
+      return clamp(
+        paragraphRange.startIndex + Math.floor(paragraphLength * visibleRatio),
+        paragraphRange.startIndex,
+        paragraphRange.endIndex,
+      );
     }
 
-    return lastVisibleEndIndex || readingScopeIndex.paragraphs[0]?.endIndex || 0;
-  }, [paragraphRangeByKey, readingScopeIndex.paragraphs]);
+    if (high >= 0) {
+      return getRangeForNode(paragraphNodes[high])?.endIndex ?? 0;
+    }
+    return getRangeForNode(paragraphNodes[Math.min(low, paragraphNodes.length - 1)])?.startIndex ?? 0;
+  }, [paragraphRangeByKey]);
+
+  const getScrollViewportStartIndex = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return 0;
+    return getTextIndexAtViewportY(stage.getBoundingClientRect().top);
+  }, [getTextIndexAtViewportY]);
+
+  const getScrollViewportEndIndex = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return 0;
+    return (
+      getTextIndexAtViewportY(stage.getBoundingClientRect().bottom) ||
+      readingScopeIndex.paragraphs[0]?.endIndex ||
+      0
+    );
+  }, [getTextIndexAtViewportY, readingScopeIndex.paragraphs]);
 
   const getCurrentStoryScope = useCallback(() => {
-    const currentPageEndIndex = isPdf
-      ? 0
-      : isPagedTextMode
-        ? getPagedPageEndIndex()
-        : getScrollPageEndIndex();
+    const currentViewportEndIndex = isPdf ? 0 : getScrollViewportEndIndex();
 
     return getCurrentStoryTextUntilPage(
       readingScopeIndex.fullText,
-      currentPageEndIndex,
+      currentViewportEndIndex,
       readingScopeIndex.chapters,
     );
   }, [
-    getPagedPageEndIndex,
-    getScrollPageEndIndex,
-    isPagedTextMode,
+    getScrollViewportEndIndex,
     isPdf,
     readingScopeIndex.chapters,
     readingScopeIndex.fullText,
@@ -862,39 +751,9 @@ function ReaderView({
     const stage = stageRef.current;
     if (!stage || !anchor) return getCurrentStoryScope();
 
-    const paragraphNodes = Array.from(
-      stage.querySelectorAll<HTMLElement>("[data-section-id][data-paragraph-index]"),
-    );
     const anchorRect = anchor.getBoundingClientRect();
     const markerY = anchorRect.top + anchorRect.height / 2;
-
-    let markerEndIndex = 0;
-    for (const node of paragraphNodes) {
-      const sectionId = node.dataset.sectionId;
-      const paragraphIndex = Number(node.dataset.paragraphIndex);
-      if (!sectionId || !Number.isFinite(paragraphIndex)) continue;
-
-      const paragraphRange = paragraphRangeByKey.get(`${sectionId}:${paragraphIndex}`);
-      if (!paragraphRange) continue;
-
-      const rect = node.getBoundingClientRect();
-      if (markerY <= rect.top) {
-        markerEndIndex = markerEndIndex || paragraphRange.startIndex;
-        break;
-      }
-
-      if (markerY >= rect.bottom) {
-        markerEndIndex = paragraphRange.endIndex;
-        continue;
-      }
-
-      const paragraphLength = paragraphRange.endIndex - paragraphRange.startIndex;
-      const markerRatio = rect.height <= 0
-        ? 0
-        : clamp((markerY - rect.top) / rect.height, 0, 1);
-      markerEndIndex = paragraphRange.startIndex + Math.floor(paragraphLength * markerRatio);
-      break;
-    }
+    const markerEndIndex = getTextIndexAtViewportY(markerY);
 
     if (markerEndIndex <= 0) return getCurrentStoryScope();
     return getCurrentStoryTextUntilPage(
@@ -904,7 +763,7 @@ function ReaderView({
     );
   }, [
     getCurrentStoryScope,
-    paragraphRangeByKey,
+    getTextIndexAtViewportY,
     readingScopeIndex.chapters,
     readingScopeIndex.fullText,
   ]);
@@ -1005,7 +864,7 @@ function ReaderView({
     if (aiMode !== "medium") return;
     setAreManualVisualizationsRevealed(false);
     setIsManualRefreshRequested(false);
-  }, [aiMode, currentPageIndex]);
+  }, [aiMode, currentScrollSegment]);
 
   useEffect(() => {
     if (!shouldSyncProgressiveNarrative) return;
@@ -1036,10 +895,10 @@ function ReaderView({
     previousMediumMarkerProgressRef.current = markerProgress;
 
     // The automatic reveal is tied to the text position indicated by the
-    // arrow, not to entering a page. On first observation, only inspect the
-    // part of the current page that is already above the arrow.
+    // arrow. On first observation, inspect only the part of the current
+    // continuous viewport that is already above the arrow.
     const detectionStart = previousProgress ?? (
-      getPagedPageStartIndex() / Math.max(readingScopeIndex.fullText.length, 1)
+      getScrollViewportStartIndex() / Math.max(readingScopeIndex.fullText.length, 1)
       - Number.EPSILON
     );
 
@@ -1070,7 +929,7 @@ function ReaderView({
   }, [
     aiMode,
     book.id,
-    getPagedPageStartIndex,
+    getScrollViewportStartIndex,
     isPdf,
     mediumMarkerEndIndex,
     mediumAutoRevealMilestones,
@@ -1150,7 +1009,7 @@ function ReaderView({
     return () => window.cancelAnimationFrame(animationFrame);
   }, [
     aiMode,
-    currentPageIndex,
+    currentScrollSegment,
     isPdf,
     settings.fontScale,
     settings.lineHeight,
@@ -1165,18 +1024,22 @@ function ReaderView({
     const stage = stageRef.current;
     if (restoringRef.current) return;
 
-    const nextProgress = isPagedTextMode
-      ? pagedPages.length <= 1
-        ? 0
-        : currentPageIndex / (pagedPages.length - 1)
-      : !stage
-        ? 0
-        : (() => {
-            const maxScroll = stage.scrollHeight - stage.clientHeight;
-            return maxScroll <= 0 ? 0 : stage.scrollTop / maxScroll;
-          })();
+    const nextProgress = !stage
+      ? 0
+      : (() => {
+          const maxScroll = stage.scrollHeight - stage.clientHeight;
+          return maxScroll <= 0 ? 0 : stage.scrollTop / maxScroll;
+        })();
     onProgressChange(book.id, nextProgress);
-  }, [book.id, currentPageIndex, isPagedTextMode, onProgressChange, pagedPages.length]);
+  }, [book.id, onProgressChange]);
+
+  const updateCurrentScrollSegment = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const segmentHeight = Math.max(stage.clientHeight * 0.82, 1);
+    const nextSegment = Math.floor(stage.scrollTop / segmentHeight);
+    setCurrentScrollSegment((current) => current === nextSegment ? current : nextSegment);
+  }, []);
 
   const updateNarrativeDebugVisibility = useCallback(() => {
     const stage = stageRef.current;
@@ -1200,23 +1063,25 @@ function ReaderView({
     frameRef.current = window.requestAnimationFrame(() => {
       updateNarrativeDebugVisibility();
       saveCurrentProgress();
+      updateCurrentScrollSegment();
       updateAiMarkerPosition();
       frameRef.current = null;
     });
-  }, [saveCurrentProgress, updateAiMarkerPosition, updateNarrativeDebugVisibility]);
+  }, [
+    saveCurrentProgress,
+    updateAiMarkerPosition,
+    updateCurrentScrollSegment,
+    updateNarrativeDebugVisibility,
+  ]);
 
-  const scrollByPage = useCallback((direction: 1 | -1) => {
-    if (isPagedTextMode) {
-      setCurrentPageIndex((current) => clamp(current + direction, 0, Math.max(pagedPages.length - 1, 0)));
-      return;
-    }
+  const scrollByViewport = useCallback((direction: 1 | -1) => {
     const stage = stageRef.current;
     if (!stage) return;
     stage.scrollBy({
       top: direction * stage.clientHeight * 0.82,
       behavior: "smooth",
     });
-  }, [isPagedTextMode, pagedPages.length]);
+  }, []);
 
   const scrollVertically = useCallback((direction: 1 | -1) => {
     const stage = stageRef.current;
@@ -1231,38 +1096,19 @@ function ReaderView({
     restoringRef.current = true;
     const animationFrame = window.requestAnimationFrame(() => {
       const currentProgress = progressRef.current;
-      if (isPagedTextMode) {
-        const nextPageIndex = pagedPages.length <= 1 ? 0 : Math.round(currentProgress * (pagedPages.length - 1));
-        setCurrentPageIndex(clamp(nextPageIndex, 0, Math.max(pagedPages.length - 1, 0)));
-      } else {
-        const stage = stageRef.current;
-        if (!stage) {
-          restoringRef.current = false;
-          return;
-        }
-        const maxScroll = stage.scrollHeight - stage.clientHeight;
-        stage.scrollTop = maxScroll > 0 ? maxScroll * currentProgress : 0;
+      const stage = stageRef.current;
+      if (!stage) {
+        restoringRef.current = false;
+        return;
       }
+      const maxScroll = stage.scrollHeight - stage.clientHeight;
+      stage.scrollTop = maxScroll > 0 ? maxScroll * currentProgress : 0;
+      updateCurrentScrollSegment();
       restoringRef.current = false;
     });
 
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [book.id, isPagedTextMode, pagedPages.length]);
-
-  useEffect(() => {
-    if (!isPagedTextMode) return;
-    const stage = stageRef.current;
-    if (!stage) return;
-    stage.scrollTo({ top: 0, behavior: "auto" });
-  }, [currentPageIndex, isPagedTextMode]);
-
-  useEffect(() => {
-    if (!isPagedTextMode || restoringRef.current) return;
-    onProgressChange(
-      book.id,
-      pagedPages.length <= 1 ? 0 : currentPageIndex / (pagedPages.length - 1),
-    );
-  }, [book.id, currentPageIndex, isPagedTextMode, onProgressChange, pagedPages.length]);
+  }, [book.id, updateCurrentScrollSegment]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1275,11 +1121,11 @@ function ReaderView({
       if (event.key === "Escape") onBack();
       if (event.key === "PageDown" || event.key === "ArrowRight") {
         event.preventDefault();
-        scrollByPage(1);
+        scrollByViewport(1);
       }
       if (event.key === "PageUp" || event.key === "ArrowLeft") {
         event.preventDefault();
-        scrollByPage(-1);
+        scrollByViewport(-1);
       }
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -1290,16 +1136,12 @@ function ReaderView({
         scrollVertically(-1);
       }
       if (event.key === "Home") {
-        if (isPagedTextMode) {
-          setCurrentPageIndex(0);
-        } else if (stageRef.current) {
+        if (stageRef.current) {
           stageRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
       }
       if (event.key === "End") {
-        if (isPagedTextMode) {
-          setCurrentPageIndex(Math.max(pagedPages.length - 1, 0));
-        } else if (stageRef.current) {
+        if (stageRef.current) {
           stageRef.current.scrollTo({ top: stageRef.current.scrollHeight, behavior: "smooth" });
         }
       }
@@ -1307,7 +1149,7 @@ function ReaderView({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPagedTextMode, onBack, pagedPages.length, scrollByPage, scrollVertically]);
+  }, [onBack, scrollByViewport, scrollVertically]);
 
   useEffect(() => {
     return () => {
@@ -1321,7 +1163,7 @@ function ReaderView({
     const animationFrame = window.requestAnimationFrame(updateNarrativeDebugVisibility);
     return () => window.cancelAnimationFrame(animationFrame);
   }, [
-    currentPageIndex,
+    currentScrollSegment,
     isExtractingNarrative,
     narrativeError,
     narrativeResult,
@@ -1633,14 +1475,6 @@ function ReaderView({
         </div>
         {isPdf ? (
           <PdfDocumentView book={book} zoom={settings.fontScale} />
-        ) : isPagedTextMode ? (
-          <PagedTextDocumentView
-            book={book}
-            currentPageIndex={currentPageIndex}
-            documentStyle={documentStyle}
-            onPageChange={setCurrentPageIndex}
-            pages={pagedPages}
-          />
         ) : (
           <TextDocumentView
             book={book}
@@ -1699,84 +1533,6 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
           {sectionIndex < book.sections.length - 1 && <div className="section-divider" aria-hidden="true" />}
         </section>
       ))}
-    </article>
-  );
-}
-
-type PagedTextDocumentViewProps = {
-  book: Book;
-  currentPageIndex: number;
-  documentStyle: CSSProperties;
-  onPageChange: (index: number) => void;
-  pages: PagedDocumentPage[];
-};
-
-function PagedTextDocumentView({
-  book,
-  currentPageIndex,
-  documentStyle,
-  onPageChange,
-  pages,
-}: PagedTextDocumentViewProps) {
-  const page = pages[currentPageIndex] ?? pages[0];
-  const isFirstPage = currentPageIndex === 0;
-  const isLastPage = currentPageIndex >= pages.length - 1;
-
-  return (
-    <article className="reader-document paged-document" style={documentStyle}>
-      <div className="paged-page" data-page-index={currentPageIndex}>
-        {currentPageIndex === 0 && (
-          <header className="document-header paged-document-header">
-            <p>{formatLabel(book.format)}</p>
-            <h1>{book.title}</h1>
-            <span>{book.author}</span>
-          </header>
-        )}
-
-        {page.items.map((item) => (
-          <section className="reader-section" data-section-id={item.sectionId} key={`${page.id}-${item.sectionId}`}>
-            {(item.label || item.heading) && (
-              <header className="section-header">
-                {item.label && <span>{item.label}</span>}
-                {item.heading && <h2>{item.heading}</h2>}
-              </header>
-            )}
-            <div className="reader-copy">
-              {item.paragraphs.map((paragraph, paragraphIndex) => (
-                <p
-                  data-section-id={item.sectionId}
-                  data-paragraph-index={item.startParagraphIndex + paragraphIndex}
-                  key={`${page.id}-${item.sectionId}-${paragraphIndex}`}
-                >
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-
-      <footer className="paged-footer">
-        <button
-          className="paged-turn-button"
-          type="button"
-          onClick={() => onPageChange(Math.max(currentPageIndex - 1, 0))}
-          disabled={isFirstPage}
-        >
-          prev
-        </button>
-        <span aria-hidden="true">
-          {currentPageIndex + 1}/{pages.length}
-        </span>
-        <button
-          className="paged-turn-button"
-          type="button"
-          onClick={() => onPageChange(Math.min(currentPageIndex + 1, pages.length - 1))}
-          disabled={isLastPage}
-        >
-          next
-        </button>
-      </footer>
     </article>
   );
 }
