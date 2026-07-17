@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -64,3 +66,56 @@ class NarrativeJSONRequest(BaseModel):
     text: str
     startIndex: int
     endIndex: int
+
+
+class ExperimentBook(BaseModel):
+    id: str
+    title: str
+    format: str
+
+
+class ExperimentEvent(BaseModel):
+    type: Literal[
+        "session_started",
+        "mode_selected",
+        "assistance_called",
+        "session_ended",
+    ]
+    timestamp: datetime
+    elapsedMs: int = Field(ge=0)
+    activeReadingMs: int = Field(ge=0)
+    progress: float = Field(ge=0.0, le=1.0)
+    mode: Literal["zero", "low", "medium", "high"] | None = None
+    trigger: Literal["manual", "automatic"] | None = None
+
+
+class LowAssistanceSummary(BaseModel):
+    used: bool
+    callCount: int = Field(ge=0)
+
+
+class MediumAssistanceSummary(LowAssistanceSummary):
+    manualCallCount: int = Field(ge=0)
+    automaticCallCount: int = Field(ge=0)
+
+
+class ExperimentAssistanceSummary(BaseModel):
+    low: LowAssistanceSummary
+    medium: MediumAssistanceSummary
+
+
+class ExperimentLog(BaseModel):
+    schemaVersion: Literal[1]
+    sessionId: UUID
+    participantId: str = Field(min_length=1, max_length=64)
+    book: ExperimentBook
+    startedAt: datetime
+    endedAt: datetime
+    completionStatus: Literal["completed", "abandoned"]
+    readingDurationMs: int = Field(ge=0)
+    readingDurationSeconds: float = Field(ge=0.0)
+    elapsedDurationMs: int = Field(ge=0)
+    initialProgress: float = Field(ge=0.0, le=1.0)
+    finalProgress: float = Field(ge=0.0, le=1.0)
+    assistance: ExperimentAssistanceSummary
+    events: list[ExperimentEvent] = Field(default_factory=list)

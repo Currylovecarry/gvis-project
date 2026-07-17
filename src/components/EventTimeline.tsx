@@ -41,6 +41,9 @@ const SIDEBAR_EVENT_RADII: Record<NarrativeEvent["importance"], number> = {
 const CHARACTER_COLORS = ["#bed7ed", "#dce8ba", "#e6c6c4", "#c3b3d0", "#e6c48f", "#fcf8b9"];
 const SUMMARY_CHARACTERS_PER_LINE = 6;
 const SUMMARY_LINE_HEIGHT = 14;
+const LOCATION_LABEL_MIN_WIDTH = 88;
+const LOCATION_LABEL_FONT_SIZE = 12;
+const LOCATION_LABEL_HORIZONTAL_PADDING = 32;
 
 const DEMO_CHARACTERS: Character[] = [
   { id: "demo-lin", name: "林澈", aliases: [], description: "", evidence: "", confidence: 1 },
@@ -265,7 +268,7 @@ export function SidebarEventTimeline({
     return null;
   }
 
-  const labelWidth = variant === "sidebar" ? 16 : 88;
+  const labelWidth = variant === "sidebar" ? 16 : getLocationLabelWidth(locations);
   const eventSpacing = variant === "sidebar" ? 160 : 150;
   const sidebarCanvasInset = variant === "sidebar" ? 160 : 0;
   const locationGap = variant === "demo" ? 14 : variant === "sidebar" ? 8 : 24;
@@ -568,6 +571,18 @@ function getStorySummaryLines(text: string, charactersPerLine = SUMMARY_CHARACTE
       index * charactersPerLine,
       (index + 1) * charactersPerLine,
     ),
+  );
+}
+
+function getLocationLabelWidth(locations: string[]) {
+  const widestLabelWidth = Math.max(
+    0,
+    ...locations.map((location) => Array.from(location).length * LOCATION_LABEL_FONT_SIZE),
+  );
+
+  return Math.max(
+    LOCATION_LABEL_MIN_WIDTH,
+    widestLabelWidth + LOCATION_LABEL_HORIZONTAL_PADDING,
   );
 }
 

@@ -8,3 +8,5 @@ build/
 .venv/
 __pycache__/
 *.py[cod]
+backend/data/experiment-logs/*
+!backend/data/experiment-logs/.gitkeep

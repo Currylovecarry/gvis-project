@@ -27,3 +27,9 @@ journey.
 | 构建工具 | Vite |
 | AI 接口 | DeepSeek API |
 | 数据格式 | JSON |
+
+# 实验日志
+
+进入每本图书前会要求填写参与者 ID。完成阅读后，文末的结束按钮会生成一条结构化 JSON，包含活跃阅读时长、自然经过时长、阅读进度，以及 Low/Medium 辅助调用统计与时间序列事件。
+
+本地运行 FastAPI 时，日志位于 `backend/data/experiment-logs/<sessionId>.json`。线上集中收集需在前端构建环境配置 `VITE_EXPERIMENT_LOG_API_URL`；未连接服务器时，记录仍会保存在参与者浏览器并可下载 JSON。

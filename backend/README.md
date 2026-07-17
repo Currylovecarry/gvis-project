@@ -41,6 +41,8 @@ Do not commit `.env`.
 - `LLM_MODEL`: Model name to use, such as a MiMo/OpenAI-compatible model name.
 - `LLM_MAX_TOKENS`: Provider-specific maximum output token budget for one extraction request. Defaults to `131072`, the observed maximum accepted by `mimo-v2.5-pro`. MiMo token accounting is much larger than standard OpenAI-style token accounting.
 - `LLM_REQUEST_TIMEOUT_SECONDS`: Request timeout for `requests` and the `curl` fallback. Defaults to `300`.
+- `EXPERIMENT_LOG_DIR`: Directory used for completed experiment JSON files. Defaults to `backend/data/experiment-logs`.
+- `CORS_ALLOW_ORIGINS`: Optional comma-separated frontend origins in addition to localhost and `https://gvis-project.vercel.app`.
 
 The backend does not depend on the OpenAI Python SDK. It first sends:
 
@@ -92,6 +94,29 @@ python test_narrative_json.py
 ```
 
 The script loads `.env`, verifies that `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL` are configured, calls `http://localhost:8000/narrative-json`, and prints the returned JSON. It does not contain or print any API key.
+
+## Experiment logs
+
+The reader posts each completed or abandoned reading session to:
+
+```text
+POST /experiment-logs
+```
+
+Each session is saved as a separate valid JSON file:
+
+```text
+backend/data/experiment-logs/<sessionId>.json
+```
+
+The file includes the participant ID, book metadata, active reading duration,
+elapsed duration, initial/final progress, Low usage and call count, Medium total,
+manual and automatic call counts, plus timestamped mode and assistance events.
+Files in this directory are ignored by Git.
+
+For a hosted frontend, set `VITE_EXPERIMENT_LOG_API_URL` to the public base URL
+of this FastAPI service. If the upload fails, the browser still retains a local
+archive and offers the participant a JSON download at the end of the session.
 
 To test provider connectivity directly without starting FastAPI:
 

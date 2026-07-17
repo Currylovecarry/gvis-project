@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -15,7 +18,7 @@ from errors import (
 )
 from llm_client import LLMClient, LLMConfig
 from narrative_extractor import NarrativeExtractor
-from schemas import NarrativeJSONRequest
+from schemas import ExperimentLog, NarrativeJSONRequest
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -28,14 +31,27 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+backend_dir = Path(__file__).resolve().parent
+experiment_log_dir = Path(
+    os.getenv("EXPERIMENT_LOG_DIR", backend_dir / "data" / "experiment-logs")
+)
+
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://gvis-project.vercel.app",
+]
+configured_origins = os.getenv("CORS_ALLOW_ORIGINS", "")
+if configured_origins:
+    allowed_origins.extend(
+        origin.strip() for origin in configured_origins.split(",") if origin.strip()
+    )
+
 app = FastAPI(title="LLM Narrative JSON API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
@@ -122,3 +138,29 @@ def extract_narrative_json(request: NarrativeJSONRequest) -> dict:
         raise NarrativeBaseError() from exc
 
     return narrative_json.model_dump()
+
+
+@app.post("/experiment-logs")
+def save_experiment_log(request: ExperimentLog) -> dict:
+    experiment_log_dir.mkdir(parents=True, exist_ok=True)
+    target = experiment_log_dir / f"{request.sessionId}.json"
+    temporary = experiment_log_dir / f".{request.sessionId}.tmp"
+    payload = request.model_dump(mode="json", exclude_none=True)
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(target)
+
+    logger.info(
+        "POST /experiment-logs — participant_id=%r session_id=%s book=%r "
+        "duration_ms=%d low_calls=%d medium_calls=%d status=%s",
+        request.participantId,
+        request.sessionId,
+        request.book.title,
+        request.readingDurationMs,
+        request.assistance.low.callCount,
+        request.assistance.medium.callCount,
+        request.completionStatus,
+    )
+    return {"saved": True, "sessionId": str(request.sessionId)}

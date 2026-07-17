@@ -3,7 +3,9 @@ import {
   ArrowRight,
   BookOpen,
   BrainCircuit,
+  CheckCircle2,
   CircleOff,
+  Download,
   FileText,
   Library,
   Minus,
@@ -20,6 +22,7 @@ import {
 import {
   CSSProperties,
   ChangeEvent,
+  FormEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -32,6 +35,7 @@ import logo1 from "./assets/logos/72084966-334c-451a-81b9-b37c9220db74-178297493
 import logo3 from "./assets/logos/31b1e46e-0fe1-4702-936a-bdd805edd20f-1782974934894_IMG_1349.svg";
 import logo4 from "./assets/logos/bc34797c-7ded-48bc-87cc-cfcbfe5e204f-1782974934894_IMG_1348.svg";
 import logo5 from "./assets/logos/21ce9ae5-90df-4728-9433-34dee7d13417-1782975463348_Oe_2026-07-02_14.55.33.svg";
+import { submitExperimentLog } from "./api/experimentLogApi";
 import { extractNarrativeJson } from "./api/narrativeApi";
 import { CharacterGraph, SidebarCharacterRelations } from "./components/CharacterGraph";
 import { SidebarEventTimeline } from "./components/EventTimeline";
@@ -42,6 +46,22 @@ import {
   getMediumAutoRevealMilestones,
   getProgressiveDemoNarrative,
 } from "./data/demoNarratives";
+import {
+  archiveExperimentLog,
+  completeExperimentSession,
+  downloadExperimentLog,
+  recordExperimentAssistanceCall,
+  recordExperimentModeSelection,
+  setExperimentSessionActive,
+  startExperimentSession,
+  type ExperimentSessionRuntime,
+} from "./experiment/experimentLog";
+import type {
+  ExperimentAiMode,
+  ExperimentAssistanceTrigger,
+  ExperimentCompletionStatus,
+  ExperimentLog,
+} from "./types/experiment";
 import type { NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
 import { loadPdfDocument, parsePdfFile, type PDFDocumentProxy } from "./utils/pdf";
@@ -54,7 +74,15 @@ import {
 
 type View = "welcome" | "library" | "reader";
 type ReaderTheme = "paper" | "plain" | "night";
-type AiMode = "zero" | "low" | "medium" | "high";
+type AiMode = ExperimentAiMode;
+
+type ExperimentSaveStatus = "saving" | "saved" | "local-only";
+
+type ExperimentReceipt = {
+  log: ExperimentLog;
+  saveStatus: ExperimentSaveStatus;
+  locallyArchived: boolean;
+};
 
 type ReaderSettings = {
   fontScale: number;
@@ -79,8 +107,12 @@ function formatPercent(value: number) {
   return `${Math.round(clamp(value, 0, 1) * 100)}%`;
 }
 
-function getSavedProgress(bookId: string) {
-  const raw = window.localStorage.getItem(`${progressKey}:${bookId}`);
+function getProgressStorageKey(bookId: string, participantId: string) {
+  return `${progressKey}:${encodeURIComponent(participantId)}:${bookId}`;
+}
+
+function getSavedProgress(bookId: string, participantId: string) {
+  const raw = window.localStorage.getItem(getProgressStorageKey(bookId, participantId));
   const value = raw ? Number.parseFloat(raw) : 0;
   return Number.isFinite(value) ? clamp(value, 0, 1) : 0;
 }
@@ -152,6 +184,21 @@ function App() {
   const [settings, setSettings] = useState<ReaderSettings>(readSettings);
   const nextCoverRef = useRef(0);
   const [progressByBook, setProgressByBook] = useState<Record<string, number>>({});
+  const [pendingBook, setPendingBook] = useState<Book | null>(null);
+  const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
+  const [experimentReceipt, setExperimentReceipt] = useState<ExperimentReceipt | null>(null);
+  const experimentSessionRef = useRef<ExperimentSessionRuntime | null>(null);
+
+  useEffect(() => {
+    const updateSessionActivity = () => {
+      const session = experimentSessionRef.current;
+      if (!session) return;
+      setExperimentSessionActive(session, document.visibilityState === "visible");
+    };
+
+    document.addEventListener("visibilitychange", updateSessionActivity);
+    return () => document.removeEventListener("visibilitychange", updateSessionActivity);
+  }, []);
 
   useEffect(() => {
     const loadPreloadedBooks = async () => {
@@ -198,20 +245,101 @@ function App() {
       if (Math.abs(currentValue - nextProgress) < 0.002) return current;
       return { ...current, [bookId]: nextProgress };
     });
-    window.localStorage.setItem(`${progressKey}:${bookId}`, String(nextProgress));
-  }, []);
+    if (activeParticipantId) {
+      window.localStorage.setItem(
+        getProgressStorageKey(bookId, activeParticipantId),
+        String(nextProgress),
+      );
+    }
+  }, [activeParticipantId]);
 
   const openBook = (book: Book) => {
-    setActiveBook(book);
+    setPendingBook(book);
+  };
+
+  const startReadingExperiment = (participantId: string) => {
+    if (!pendingBook) return;
+
+    const initialProgress = getSavedProgress(pendingBook.id, participantId);
+    experimentSessionRef.current = startExperimentSession({
+      participantId,
+      book: pendingBook,
+      initialProgress,
+    });
+    setActiveParticipantId(participantId);
+    setActiveBook(pendingBook);
     setProgressByBook((current) => ({
       ...current,
-      [book.id]: current[book.id] ?? getSavedProgress(book.id),
+      [pendingBook.id]: initialProgress,
     }));
+    setPendingBook(null);
+    setExperimentReceipt(null);
     setView("reader");
   };
 
-  const closeReader = () => {
+  const recordModeSelection = useCallback((mode: ExperimentAiMode, progress: number) => {
+    const session = experimentSessionRef.current;
+    if (!session) return;
+    recordExperimentModeSelection(session, mode, progress);
+  }, []);
+
+  const recordAssistanceCall = useCallback((
+    mode: "low" | "medium",
+    trigger: ExperimentAssistanceTrigger,
+    progress: number,
+  ) => {
+    const session = experimentSessionRef.current;
+    if (!session) return;
+    recordExperimentAssistanceCall(session, mode, trigger, progress);
+  }, []);
+
+  const finishReadingExperiment = useCallback((
+    completionStatus: ExperimentCompletionStatus,
+    finalProgress: number,
+  ) => {
+    const session = experimentSessionRef.current;
+    if (!session) return;
+
+    const log = completeExperimentSession(session, completionStatus, finalProgress);
+    const locallyArchived = archiveExperimentLog(log);
+    experimentSessionRef.current = null;
+    setExperimentReceipt({
+      log,
+      locallyArchived,
+      saveStatus: "saving",
+    });
+    setActiveParticipantId(null);
+    setActiveBook(null);
     setView("library");
+
+    void submitExperimentLog(log)
+      .then(() => {
+        setExperimentReceipt((current) =>
+          current?.log.sessionId === log.sessionId
+            ? { ...current, saveStatus: "saved" }
+            : current,
+        );
+      })
+      .catch(() => {
+        setExperimentReceipt((current) =>
+          current?.log.sessionId === log.sessionId
+            ? { ...current, saveStatus: "local-only" }
+            : current,
+        );
+      });
+  }, []);
+
+  const closeReader = () => {
+    const session = experimentSessionRef.current;
+    if (!session) {
+      setView("library");
+      return;
+    }
+
+    const confirmed = window.confirm("退出阅读会结束本次实验记录，确定退出吗？");
+    if (!confirmed) return;
+    const finalProgress = activeBook ? progressByBook[activeBook.id] ?? 0 : 0;
+    finishReadingExperiment("abandoned", finalProgress);
   };
 
   const createPlaceholderBook = (file: File): Book => {
@@ -255,9 +383,8 @@ function App() {
       nextCoverRef.current = (nextCoverRef.current + 1) % coverImages.length;
 
       setLibraryBooks((currentBooks) => [importedBook, ...currentBooks]);
-      setActiveBook(importedBook);
-      updateBookProgress(importedBook.id, 0);
-      setView("reader");
+      setPendingBook(importedBook);
+      setView("library");
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "导入失败");
     } finally {
@@ -280,7 +407,9 @@ function App() {
       const { [book.id]: _deletedProgress, ...rest } = current;
       return rest;
     });
-    window.localStorage.removeItem(`${progressKey}:${book.id}`);
+    if (activeParticipantId) {
+      window.localStorage.removeItem(getProgressStorageKey(book.id, activeParticipantId));
+    }
   };
 
   return (
@@ -305,8 +434,25 @@ function App() {
           progress={progressByBook[activeBook.id] ?? 0}
           settings={settings}
           onBack={closeReader}
+          onAssistanceCall={recordAssistanceCall}
+          onFinish={(finalProgress) => finishReadingExperiment("completed", finalProgress)}
+          onModeSelection={recordModeSelection}
           onProgressChange={updateBookProgress}
           onSettingsChange={updateSettings}
+        />
+      )}
+      {pendingBook && (
+        <ExperimentParticipantDialog
+          book={pendingBook}
+          onCancel={() => setPendingBook(null)}
+          onStart={startReadingExperiment}
+        />
+      )}
+      {experimentReceipt && (
+        <ExperimentReceiptDialog
+          receipt={experimentReceipt}
+          onClose={() => setExperimentReceipt(null)}
+          onDownload={() => downloadExperimentLog(experimentReceipt.log)}
         />
       )}
     </main>
@@ -592,11 +738,161 @@ function BookCover({ book }: { book: Book }) {
   );
 }
 
+type ExperimentParticipantDialogProps = {
+  book: Book;
+  onCancel: () => void;
+  onStart: (participantId: string) => void;
+};
+
+function ExperimentParticipantDialog({
+  book,
+  onCancel,
+  onStart,
+}: ExperimentParticipantDialogProps) {
+  const [participantId, setParticipantId] = useState("");
+  const [validationError, setValidationError] = useState("");
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedId = participantId.trim();
+    if (!normalizedId) {
+      setValidationError("请输入参与者 ID");
+      return;
+    }
+    onStart(normalizedId);
+  };
+
+  return (
+    <div className="experiment-dialog-backdrop">
+      <section
+        className="experiment-dialog experiment-participant-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="experiment-participant-title"
+      >
+        <form onSubmit={handleSubmit}>
+          <p className="experiment-dialog-kicker">阅读实验</p>
+          <h2 id="experiment-participant-title">开始阅读《{book.title}》</h2>
+          <p className="experiment-dialog-description">
+            请输入分配给你的实验编号。本次阅读会记录阅读时长，以及 Low、Medium 辅助的调用情况。
+          </p>
+          <label className="experiment-id-field">
+            <span>参与者 ID</span>
+            <input
+              autoComplete="off"
+              autoFocus
+              maxLength={64}
+              name="participantId"
+              onChange={(event) => {
+                setParticipantId(event.target.value);
+                if (validationError) setValidationError("");
+              }}
+              placeholder="例如 P001"
+              value={participantId}
+            />
+          </label>
+          {validationError && <p className="experiment-form-error" role="alert">{validationError}</p>}
+          <p className="experiment-privacy-note">请只填写实验编号，不要填写姓名或联系方式。</p>
+          <div className="experiment-dialog-actions">
+            <button className="experiment-secondary-button" type="button" onClick={onCancel}>取消</button>
+            <button className="experiment-primary-button" type="submit">开始阅读</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ExperimentReceiptDialog({
+  receipt,
+  onClose,
+  onDownload,
+}: {
+  receipt: ExperimentReceipt;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  const { log, locallyArchived, saveStatus } = receipt;
+  const saveMessage = saveStatus === "saving"
+    ? "正在保存实验记录…"
+    : saveStatus === "saved"
+      ? locallyArchived
+        ? "记录已写入实验服务器，并保留在本浏览器。"
+        : "记录已写入实验服务器。"
+      : locallyArchived
+        ? "服务器暂时未连接；记录已保存在本浏览器，请下载 JSON 备份。"
+        : "自动保存未成功，请立即下载 JSON 文件。";
+
+  return (
+    <div className="experiment-dialog-backdrop">
+      <section
+        className="experiment-dialog experiment-receipt-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="experiment-receipt-title"
+      >
+        <CheckCircle2 aria-hidden="true" className="experiment-receipt-icon" size={30} strokeWidth={1.8} />
+        <p className="experiment-dialog-kicker">记录完成</p>
+        <h2 id="experiment-receipt-title">
+          {log.completionStatus === "completed" ? "本次阅读已结束" : "本次阅读已退出"}
+        </h2>
+        <dl className="experiment-receipt-summary">
+          <div>
+            <dt>参与者</dt>
+            <dd>{log.participantId}</dd>
+          </div>
+          <div>
+            <dt>活跃阅读时长</dt>
+            <dd>{formatExperimentDuration(log.readingDurationSeconds)}</dd>
+          </div>
+          <div>
+            <dt>Low 调用</dt>
+            <dd>{log.assistance.low.callCount} 次</dd>
+          </div>
+          <div>
+            <dt>Medium 调用</dt>
+            <dd>{log.assistance.medium.callCount} 次</dd>
+          </div>
+        </dl>
+        <p className={`experiment-save-status status-${saveStatus}`} aria-live="polite">{saveMessage}</p>
+        <div className="experiment-dialog-actions">
+          <button className="experiment-secondary-button" type="button" onClick={onDownload}>
+            <Download aria-hidden="true" size={16} strokeWidth={2} />
+            下载 JSON
+          </button>
+          <button
+            className="experiment-primary-button"
+            type="button"
+            disabled={saveStatus === "saving"}
+            onClick={onClose}
+          >
+            {saveStatus === "saving" ? "保存中…" : "完成"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function formatExperimentDuration(seconds: number) {
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainder = totalSeconds % 60;
+  return minutes > 0 ? `${minutes} 分 ${remainder} 秒` : `${remainder} 秒`;
+}
+
 type ReaderViewProps = {
   book: Book;
   progress: number;
   settings: ReaderSettings;
   onBack: () => void;
+  onAssistanceCall: (
+    mode: "low" | "medium",
+    trigger: ExperimentAssistanceTrigger,
+    progress: number,
+  ) => void;
+  onFinish: (finalProgress: number) => void;
+  onModeSelection: (mode: ExperimentAiMode, progress: number) => void;
   onProgressChange: (bookId: string, progress: number) => void;
   onSettingsChange: (settings: ReaderSettings) => void;
 };
@@ -606,6 +902,9 @@ function ReaderView({
   progress,
   settings,
   onBack,
+  onAssistanceCall,
+  onFinish,
+  onModeSelection,
   onProgressChange,
   onSettingsChange,
 }: ReaderViewProps) {
@@ -803,6 +1102,9 @@ function ReaderView({
   const handleAiExtractAtMarker = useCallback((anchor: HTMLButtonElement) => {
     const scope = getStoryScopeAtAiMarker(anchor);
     setSettingsOpen(false);
+    if (aiMode === "low" || aiMode === "medium") {
+      onAssistanceCall(aiMode, "manual", readingProgress);
+    }
     if (isManualNarrativeMode) setAreManualVisualizationsRevealed(true);
 
     if (!scope?.text.trim()) {
@@ -835,6 +1137,8 @@ function ReaderView({
     handleExtractNarrativeJson,
     isManualNarrativeMode,
     isProgressiveDemo,
+    onAssistanceCall,
+    readingProgress,
     readingScopeIndex.fullText.length,
   ]);
 
@@ -926,6 +1230,7 @@ function ReaderView({
     setNarrativeError("");
     setIsNarrativeSyncing(false);
     setAreManualVisualizationsRevealed(true);
+    onAssistanceCall("medium", "automatic", markerProgress);
   }, [
     aiMode,
     book.id,
@@ -933,6 +1238,7 @@ function ReaderView({
     isPdf,
     mediumMarkerEndIndex,
     mediumAutoRevealMilestones,
+    onAssistanceCall,
     readingScopeIndex.chapters,
     readingScopeIndex.fullText,
   ]);
@@ -1024,14 +1330,18 @@ function ReaderView({
     const stage = stageRef.current;
     if (restoringRef.current) return;
 
-    const nextProgress = !stage
-      ? 0
-      : (() => {
-          const maxScroll = stage.scrollHeight - stage.clientHeight;
-          return maxScroll <= 0 ? 0 : stage.scrollTop / maxScroll;
-        })();
+    const maxScroll = stage ? stage.scrollHeight - stage.clientHeight : 0;
+    const nextProgress = !stage || maxScroll <= 0 ? 0 : stage.scrollTop / maxScroll;
     onProgressChange(book.id, nextProgress);
   }, [book.id, onProgressChange]);
+
+  const finishReading = useCallback(() => {
+    const stage = stageRef.current;
+    const maxScroll = stage ? stage.scrollHeight - stage.clientHeight : 0;
+    const finalProgress = !stage || maxScroll <= 0 ? 1 : stage.scrollTop / maxScroll;
+    onProgressChange(book.id, finalProgress);
+    onFinish(finalProgress);
+  }, [book.id, onFinish, onProgressChange]);
 
   const updateCurrentScrollSegment = useCallback(() => {
     const stage = stageRef.current;
@@ -1187,6 +1497,9 @@ function ReaderView({
   };
 
   const selectAiMode = (mode: AiMode) => {
+    if (mode !== aiMode) {
+      onModeSelection(mode, readingProgress);
+    }
     setAiMode(mode);
     const isManualMode = mode === "low" || mode === "medium";
     setAreManualVisualizationsRevealed(!isManualMode);
@@ -1491,6 +1804,12 @@ function ReaderView({
             />
           </div>
         )}
+        <section className="experiment-finish-panel" aria-labelledby="experiment-finish-title">
+          <p>已到达阅读末尾</p>
+          <h2 id="experiment-finish-title">结束本次阅读</h2>
+          <span>点击后将保存阅读时长和辅助调用记录，并生成可下载的 JSON。</span>
+          <button type="button" onClick={finishReading}>结束阅读并保存记录</button>
+        </section>
       </div>
 
     </section>
