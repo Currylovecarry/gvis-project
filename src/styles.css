@@ -26,6 +26,11 @@
   --display: "Corose", "Bradley Hand", "Comic Sans MS", "Marker Felt", cursive;
   --display-cn: "STKaiti", "Kaiti SC", "Songti SC", "PingFang SC", serif;
   --reader-accent: #b8c79a;
+  --experiment-action-bg: oklch(91.1% 0.028 122.7);
+  --experiment-action-bg-hover: oklch(88.1% 0.043 123.2);
+  --experiment-action-bg-active: oklch(85% 0.053 122.9);
+  --experiment-action-ink: oklch(42.7% 0.064 123.5);
+  --experiment-action-focus: oklch(80.7% 0.063 122.8 / 0.72);
   --reader-hand: "Patrick Hand", "Patrick Hand SC", "Caveat", cursive;
   --reader-hand-title: "Caveat", "Patrick Hand SC", "Patrick Hand", cursive;
   --reader-hand-cn: "LXGW WenKai", "Kaiti SC", "STKaiti", "Songti SC", serif;
@@ -616,19 +621,27 @@ button {
     opacity 180ms ease;
 }
 
-.experiment-primary-button,
+.experiment-dialog-actions .experiment-primary-button,
 .experiment-finish-panel button {
-  color: #ffffff;
-  background: #586733;
-  border: 1px solid #586733;
+  padding-inline: 22px;
+  color: var(--experiment-action-ink);
+  background: var(--experiment-action-bg);
+  border: 1px solid var(--experiment-action-bg);
+  border-radius: 999px;
 }
 
 .experiment-primary-button:hover,
 .experiment-primary-button:focus-visible,
 .experiment-finish-panel button:hover,
 .experiment-finish-panel button:focus-visible {
-  background: #48552c;
-  border-color: #48552c;
+  background: var(--experiment-action-bg-hover);
+  border-color: var(--experiment-action-bg-hover);
+}
+
+.experiment-primary-button:active,
+.experiment-finish-panel button:active {
+  background: var(--experiment-action-bg-active);
+  border-color: var(--experiment-action-bg-active);
 }
 
 .experiment-secondary-button {
@@ -649,7 +662,7 @@ button {
 
 .experiment-dialog-actions button:focus-visible,
 .experiment-finish-panel button:focus-visible {
-  outline: 2px solid rgba(184, 199, 154, 0.92);
+  outline: 3px solid var(--experiment-action-focus);
   outline-offset: 3px;
 }
 
