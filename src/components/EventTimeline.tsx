@@ -203,6 +203,7 @@ export function SidebarEventTimeline({
     startX: number;
     startScrollLeft: number;
   } | null>(null);
+  const previousLatestEventIdRef = useRef<string | null>(null);
   const orderedEvents = useMemo(
     () => normalizeEvents(sourceEvents).sort((first, second) => first.order - second.order) as VisualEvent[],
     [sourceEvents],
@@ -226,11 +227,18 @@ export function SidebarEventTimeline({
   );
 
   useEffect(() => {
-    setSelectedEvent((current) =>
-      displayedEvents.find((event) => event.id === current?.id)
-      ?? displayedEvents[displayedEvents.length - 1]
-      ?? null,
-    );
+    const latestEvent = displayedEvents[displayedEvents.length - 1] ?? null;
+    const previousLatestEventId = previousLatestEventIdRef.current;
+
+    setSelectedEvent((current) => {
+      const matchingCurrent = current
+        ? displayedEvents.find((event) => event.id === current.id) ?? null
+        : null;
+      const wasFollowingLatest = !matchingCurrent || current?.id === previousLatestEventId;
+
+      return wasFollowingLatest ? latestEvent : matchingCurrent;
+    });
+    previousLatestEventIdRef.current = latestEvent?.id ?? null;
   }, [displayedEvents, variant]);
 
   useEffect(() => {
