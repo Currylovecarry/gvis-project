@@ -53,6 +53,7 @@ import {
   downloadExperimentLog,
   recordExperimentAssistanceCall,
   recordExperimentModeSelection,
+  recordExperimentVisualizationDetailOpen,
   setExperimentSessionActive,
   startExperimentSession,
   type ExperimentSessionRuntime,
@@ -62,6 +63,7 @@ import type {
   ExperimentAssistanceTrigger,
   ExperimentCompletionStatus,
   ExperimentLog,
+  ExperimentVisualizationDetail,
 } from "./types/experiment";
 import type { NarrativeJsonResponse } from "./types/narrative";
 import { parseEpubFile, parseTextFile } from "./utils/epub";
@@ -296,6 +298,21 @@ function App() {
     recordExperimentAssistanceCall(session, mode, trigger, progress);
   }, []);
 
+  const recordVisualizationDetailOpen = useCallback((
+    visualizationDetail: ExperimentVisualizationDetail,
+    mode: ExperimentAiMode,
+    progress: number,
+  ) => {
+    const session = experimentSessionRef.current;
+    if (!session) return;
+    recordExperimentVisualizationDetailOpen(
+      session,
+      visualizationDetail,
+      mode,
+      progress,
+    );
+  }, []);
+
   const finishReadingExperiment = useCallback((
     completionStatus: ExperimentCompletionStatus,
     finalProgress: number,
@@ -442,6 +459,7 @@ function App() {
           onModeSelection={recordModeSelection}
           onProgressChange={updateBookProgress}
           onSettingsChange={updateSettings}
+          onVisualizationDetailOpen={recordVisualizationDetailOpen}
         />
       )}
       {pendingBook && (
@@ -687,26 +705,17 @@ function LibraryView({
 
             {experimentBooks.length ? (
               <div className="library-shelf-scroll">
-                <section className="book-group" aria-labelledby="experiment-group-title">
-                  <header className="book-group-header">
-                    <div>
-                      <h2 id="experiment-group-title">阅读实验组</h2>
-                      <p>选择文章开始正式阅读，系统会记录进度与辅助调用。</p>
-                    </div>
-                    <span>{experimentBooks.length} 本文章</span>
-                  </header>
-                  <div className="book-grid">
-                    {experimentBooks.map((book) => (
-                      <BookTile
-                        book={book}
-                        key={book.id}
-                        canDelete
-                        onOpenBook={onOpenBook}
-                        onDeleteBook={onDeleteBook}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <div className="book-grid">
+                  {experimentBooks.map((book) => (
+                    <BookTile
+                      book={book}
+                      key={book.id}
+                      canDelete
+                      onOpenBook={onOpenBook}
+                      onDeleteBook={onDeleteBook}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="empty-state">
@@ -748,10 +757,7 @@ function BookTile({ book, canDelete, onOpenBook, onDeleteBook }: BookTileProps) 
       >
         <BookCover book={book} />
         <div className="book-tile-body">
-          <div>
-            <strong>{book.title}</strong>
-            <span>{book.author}</span>
-          </div>
+          <strong>{book.title}</strong>
         </div>
       </button>
       {canDelete && (
@@ -936,6 +942,11 @@ type ReaderViewProps = {
   onModeSelection: (mode: ExperimentAiMode, progress: number) => void;
   onProgressChange: (bookId: string, progress: number) => void;
   onSettingsChange: (settings: ReaderSettings) => void;
+  onVisualizationDetailOpen: (
+    visualizationDetail: ExperimentVisualizationDetail,
+    mode: ExperimentAiMode,
+    progress: number,
+  ) => void;
 };
 
 function ReaderView({
@@ -948,6 +959,7 @@ function ReaderView({
   onModeSelection,
   onProgressChange,
   onSettingsChange,
+  onVisualizationDetailOpen,
 }: ReaderViewProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const aiMarkerRef = useRef<HTMLButtonElement>(null);
@@ -1691,6 +1703,7 @@ function ReaderView({
                   characters={narrativeResult?.characters ?? []}
                   events={narrativeResult?.events ?? []}
                   onExpand={() => {
+                    onVisualizationDetailOpen("event_map", aiMode, readingProgress);
                     setIsCharacterGraphFullscreen(false);
                     setIsNarrativeMapFullscreen(true);
                   }}
@@ -1795,6 +1808,7 @@ function ReaderView({
           result={narrativeResult}
           obscured={areVisualizationsObscured}
           onExpand={() => {
+            onVisualizationDetailOpen("character_graph", aiMode, readingProgress);
             setIsNarrativeMapFullscreen(false);
             setIsCharacterGraphFullscreen(true);
           }}
@@ -1868,7 +1882,6 @@ function TextDocumentView({ book, documentStyle }: TextDocumentViewProps) {
       <header className="document-header">
         <p>{formatLabel(book.format)}</p>
         <h1>{book.title}</h1>
-        <span>{book.author}</span>
       </header>
 
       {book.sections.map((section, sectionIndex) => (

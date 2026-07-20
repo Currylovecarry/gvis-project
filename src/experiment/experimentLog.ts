@@ -5,6 +5,7 @@ import type {
   ExperimentCompletionStatus,
   ExperimentEvent,
   ExperimentLog,
+  ExperimentVisualizationDetail,
 } from "../types/experiment";
 
 const experimentArchiveKey = "gvis-experiment-logs:v1";
@@ -21,6 +22,7 @@ export type ExperimentSessionRuntime = {
   activeSegmentStartedAtMs: number | null;
   initialProgress: number;
   assistance: ExperimentLog["assistance"];
+  visualizationDetails: ExperimentLog["visualizationDetails"];
   events: ExperimentEvent[];
 };
 
@@ -62,6 +64,10 @@ export function startExperimentSession({
         manualCallCount: 0,
         automaticCallCount: 0,
       },
+    },
+    visualizationDetails: {
+      eventMapExpandCount: 0,
+      characterGraphExpandCount: 0,
     },
     events: [],
   };
@@ -133,6 +139,26 @@ export function recordExperimentAssistanceCall(
   }));
 }
 
+export function recordExperimentVisualizationDetailOpen(
+  session: ExperimentSessionRuntime,
+  visualizationDetail: ExperimentVisualizationDetail,
+  mode: ExperimentAiMode,
+  progress: number,
+) {
+  if (visualizationDetail === "event_map") {
+    session.visualizationDetails.eventMapExpandCount += 1;
+  } else {
+    session.visualizationDetails.characterGraphExpandCount += 1;
+  }
+
+  session.events.push(createEvent(session, {
+    type: "visualization_detail_opened",
+    visualizationDetail,
+    mode,
+    progress,
+  }));
+}
+
 export function completeExperimentSession(
   session: ExperimentSessionRuntime,
   completionStatus: ExperimentCompletionStatus,
@@ -149,7 +175,7 @@ export function completeExperimentSession(
   }));
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sessionId: session.sessionId,
     participantId: session.participantId,
     book: session.book,
@@ -162,6 +188,7 @@ export function completeExperimentSession(
     initialProgress: clampProgress(session.initialProgress),
     finalProgress: clampProgress(finalProgress),
     assistance: structuredClone(session.assistance),
+    visualizationDetails: structuredClone(session.visualizationDetails),
     events: [...session.events],
   };
 }
@@ -200,7 +227,7 @@ export function downloadExperimentLog(log: ExperimentLog) {
 function createEvent(
   session: ExperimentSessionRuntime,
   event: Pick<ExperimentEvent, "type" | "progress"> &
-    Partial<Pick<ExperimentEvent, "mode" | "trigger">>,
+    Partial<Pick<ExperimentEvent, "mode" | "trigger" | "visualizationDetail">>,
 ): ExperimentEvent {
   const nowEpochMs = Date.now();
   return {

@@ -111,7 +111,8 @@ backend/data/experiment-logs/<sessionId>.json
 
 The file includes the participant ID, book metadata, active reading duration,
 elapsed duration, initial/final progress, Low usage and call count, Medium total,
-manual and automatic call counts, plus timestamped mode and assistance events.
+manual and automatic call counts, event-map and character-graph detail expansion
+counts, plus timestamped mode, assistance, and visualization-detail events.
 Files in this directory are ignored by Git.
 
 For a hosted frontend, set `VITE_EXPERIMENT_LOG_API_URL` to the public base URL

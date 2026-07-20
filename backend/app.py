@@ -154,13 +154,16 @@ def save_experiment_log(request: ExperimentLog) -> dict:
 
     logger.info(
         "POST /experiment-logs — participant_id=%r session_id=%s book=%r "
-        "duration_ms=%d low_calls=%d medium_calls=%d status=%s",
+        "duration_ms=%d low_calls=%d medium_calls=%d event_map_expands=%d "
+        "character_graph_expands=%d status=%s",
         request.participantId,
         request.sessionId,
         request.book.title,
         request.readingDurationMs,
         request.assistance.low.callCount,
         request.assistance.medium.callCount,
+        request.visualizationDetails.eventMapExpandCount,
+        request.visualizationDetails.characterGraphExpandCount,
         request.completionStatus,
     )
     return {"saved": True, "sessionId": str(request.sessionId)}

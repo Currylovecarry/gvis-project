@@ -79,6 +79,7 @@ class ExperimentEvent(BaseModel):
         "session_started",
         "mode_selected",
         "assistance_called",
+        "visualization_detail_opened",
         "session_ended",
     ]
     timestamp: datetime
@@ -87,6 +88,7 @@ class ExperimentEvent(BaseModel):
     progress: float = Field(ge=0.0, le=1.0)
     mode: Literal["zero", "low", "medium", "high"] | None = None
     trigger: Literal["manual", "automatic"] | None = None
+    visualizationDetail: Literal["event_map", "character_graph"] | None = None
 
 
 class LowAssistanceSummary(BaseModel):
@@ -104,8 +106,13 @@ class ExperimentAssistanceSummary(BaseModel):
     medium: MediumAssistanceSummary
 
 
+class ExperimentVisualizationDetailsSummary(BaseModel):
+    eventMapExpandCount: int = Field(default=0, ge=0)
+    characterGraphExpandCount: int = Field(default=0, ge=0)
+
+
 class ExperimentLog(BaseModel):
-    schemaVersion: Literal[1]
+    schemaVersion: Literal[1, 2]
     sessionId: UUID
     participantId: str = Field(min_length=1, max_length=64)
     book: ExperimentBook
@@ -118,4 +125,7 @@ class ExperimentLog(BaseModel):
     initialProgress: float = Field(ge=0.0, le=1.0)
     finalProgress: float = Field(ge=0.0, le=1.0)
     assistance: ExperimentAssistanceSummary
+    visualizationDetails: ExperimentVisualizationDetailsSummary = Field(
+        default_factory=ExperimentVisualizationDetailsSummary
+    )
     events: list[ExperimentEvent] = Field(default_factory=list)
