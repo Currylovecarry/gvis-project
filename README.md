@@ -33,3 +33,15 @@ journey.
 进入每本图书前会要求填写参与者 ID。完成阅读后，文末的结束按钮会生成一条结构化 JSON，包含活跃阅读时长、自然经过时长、阅读进度，以及 Low/Medium 辅助调用统计与时间序列事件。
 
 本地运行 FastAPI 时，日志位于 `backend/data/experiment-logs/<sessionId>.json`。线上集中收集需在前端构建环境配置 `VITE_EXPERIMENT_LOG_API_URL`；未连接服务器时，记录仍会保存在参与者浏览器并可下载 JSON。
+
+# EPUB 文本校验
+
+项目内置了针对 PDF 重排 EPUB 的中文空格、分页断句和空白段落校验工具。普通英文词间空格不会被删除。
+
+```bash
+# 校验
+python3 scripts/normalize_epub_text.py --check public/books experiments/apple-books-reader-prototype/public/books
+
+# 修复并原地更新 EPUB
+python3 scripts/normalize_epub_text.py --write public/books experiments/apple-books-reader-prototype/public/books
+```
