@@ -46,6 +46,7 @@ import {
   getMediumAutoRevealMilestones,
   getProgressiveDemoNarrative,
 } from "./data/demoNarratives";
+import { SYSTEM_GUIDE_BOOK, SYSTEM_GUIDE_BOOK_ID } from "./data/systemGuide";
 import {
   archiveExperimentLog,
   completeExperimentSession,
@@ -168,16 +169,16 @@ function buildFallbackNarrativeJson(scope: CurrentStoryScope): NarrativeJsonResp
 const coverImages = [logo1, logo3, logo4, logo5];
 
 const preloadedBooks = [
-  { path: "/books/财神与爱神 - 未知.epub", id: "the-gift-of-the-magi" },
-  { path: "/books/托宾的手相 - 未知.epub", id: "tobin-s-palm" },
-  { path: "/books/华而不实 - 未知.epub", id: "the-shamrock-and-the-palm" },
+  { path: "/books/财神与爱神 - 未知.epub", id: "fortune-and-love" },
+  { path: "/books/托宾的手相 - 未知.epub", id: "tobins-palm" },
+  { path: "/books/华而不实 - 未知.epub", id: "the-sham" },
   { path: "/books/昙花一现 - 未知.epub", id: "the-brief-debut-of-tildy" },
 ];
 
 function App() {
   const [view, setView] = useState<View>("welcome");
   const [query, setQuery] = useState("");
-  const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
+  const [libraryBooks, setLibraryBooks] = useState<Book[]>([SYSTEM_GUIDE_BOOK]);
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
@@ -227,10 +228,12 @@ function App() {
 
   const filteredBooks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return libraryBooks;
-    return libraryBooks.filter((book) =>
+    const guideBook = libraryBooks.find((book) => book.id === SYSTEM_GUIDE_BOOK_ID);
+    const searchableBooks = libraryBooks.filter((book) => book.id !== SYSTEM_GUIDE_BOOK_ID);
+    const matchingBooks = !normalized ? searchableBooks : searchableBooks.filter((book) =>
       `${book.title} ${book.author} ${formatLabel(book.format)}`.toLowerCase().includes(normalized),
     );
+    return guideBook ? [guideBook, ...matchingBooks] : matchingBooks;
   }, [libraryBooks, query]);
 
   const updateSettings = useCallback((nextSettings: ReaderSettings) => {
@@ -527,6 +530,12 @@ function LibraryView({
   const [libraryPage, setLibraryPage] = useState<"shelf" | "demo">("shelf");
   const [activeDemoId, setActiveDemoId] = useState(DEMO_NARRATIVES[0].id);
   const activeDemo = DEMO_NARRATIVES.find((demo) => demo.id === activeDemoId) ?? DEMO_NARRATIVES[0];
+  const guideBooks = libraryBooks.filter((book) => book.id === SYSTEM_GUIDE_BOOK_ID);
+  const experimentBooks = libraryBooks.filter((book) => book.id !== SYSTEM_GUIDE_BOOK_ID);
+  const openSystemGuide = () => {
+    const guideBook = guideBooks[0];
+    if (guideBook) onOpenBook(guideBook);
+  };
 
   const handleImport = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -553,9 +562,21 @@ function LibraryView({
             <span className="brand-title-cn">微光</span>
           </span>
         </strong>
-        <label className="import-button" htmlFor={fileInputId} aria-label="导入图书">
-          <Upload size={18} strokeWidth={2.2} />
-        </label>
+        <div className="mobile-header-actions">
+          <button
+            className="mobile-guide-button"
+            type="button"
+            onClick={openSystemGuide}
+            disabled={!guideBooks.length}
+            aria-label="开始演示"
+            title="演示组"
+          >
+            <BookOpen size={18} strokeWidth={2.1} />
+          </button>
+          <label className="import-button" htmlFor={fileInputId} aria-label="导入图书">
+            <Upload size={18} strokeWidth={2.2} />
+          </label>
+        </div>
       </header>
 
       <div className="mobile-search">
@@ -596,9 +617,14 @@ function LibraryView({
             <Library size={19} strokeWidth={2.1} />
             <span>全部图书</span>
           </button>
-          <button className="nav-item" type="button">
+          <button
+            className="nav-item"
+            type="button"
+            onClick={openSystemGuide}
+            disabled={!guideBooks.length}
+          >
             <BookOpen size={19} strokeWidth={2.1} />
-            <span>继续阅读</span>
+            <span>演示组</span>
           </button>
           <button className={`nav-item${libraryPage === "demo" ? " active" : ""}`} type="button" onClick={() => setLibraryPage("demo")}>
             <Sparkles size={19} strokeWidth={2.1} />
@@ -615,7 +641,7 @@ function LibraryView({
         {libraryPage === "demo" ? (
           <section className="library-map-demo" aria-label={`${activeDemo.title}事件地点图示例`}>
             <header>
-              <p>Visualization demo · 4 stories</p>
+              <p>Visualization demo · {DEMO_NARRATIVES.length} stories</p>
               <h1>{activeDemo.title}</h1>
               <span>事件进展与地点</span>
               <div className="library-demo-switcher" aria-label="选择实验书籍">
@@ -659,17 +685,28 @@ function LibraryView({
               </div>
             </header>
 
-            {libraryBooks.length ? (
-              <div className="book-grid">
-                {libraryBooks.map((book) => (
-                  <BookTile
-                    book={book}
-                    key={book.id}
-                    canDelete
-                    onOpenBook={onOpenBook}
-                    onDeleteBook={onDeleteBook}
-                  />
-                ))}
+            {experimentBooks.length ? (
+              <div className="library-shelf-scroll">
+                <section className="book-group" aria-labelledby="experiment-group-title">
+                  <header className="book-group-header">
+                    <div>
+                      <h2 id="experiment-group-title">阅读实验组</h2>
+                      <p>选择文章开始正式阅读，系统会记录进度与辅助调用。</p>
+                    </div>
+                    <span>{experimentBooks.length} 本文章</span>
+                  </header>
+                  <div className="book-grid">
+                    {experimentBooks.map((book) => (
+                      <BookTile
+                        book={book}
+                        key={book.id}
+                        canDelete
+                        onOpenBook={onOpenBook}
+                        onDeleteBook={onDeleteBook}
+                      />
+                    ))}
+                  </div>
+                </section>
               </div>
             ) : (
               <div className="empty-state">
@@ -679,7 +716,11 @@ function LibraryView({
             )}
 
             <footer className="library-footer">
-              <span>{isImporting ? "正在解析文件..." : `${libraryBooks.length} 本书`}</span>
+              <span>
+                {isImporting
+                  ? "正在解析文件..."
+                  : `${experimentBooks.length} 本书`}
+              </span>
               {importError && <strong>{importError}</strong>}
             </footer>
           </>

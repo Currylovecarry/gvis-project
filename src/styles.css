@@ -485,6 +485,11 @@ button {
   opacity: 0.72;
 }
 
+.nav-item:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
 .library-main {
   position: relative;
   display: flex;
@@ -910,17 +915,64 @@ button {
   opacity: 0.72;
 }
 
+.library-shelf-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 30px 4px 18px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.book-group + .book-group {
+  margin-top: 42px;
+}
+
+.book-group-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(31, 30, 26, 0.1);
+}
+
+.book-group-header h2,
+.book-group-header p {
+  margin: 0;
+}
+
+.book-group-header h2 {
+  color: var(--reader-ink);
+  font-family: var(--reader-hand-cn);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.book-group-header p {
+  max-width: 62ch;
+  margin-top: 4px;
+  color: var(--reader-muted);
+  font-family: var(--reader-hand-cn);
+  font-size: 13px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.book-group-header > span {
+  flex: 0 0 auto;
+  color: var(--reader-muted);
+  font-family: var(--reader-hand-cn);
+  font-size: 13px;
+}
+
 .book-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 24px 20px;
   align-content: start;
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 34px 4px 18px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
+  padding: 22px 0 8px;
 }
 
 .book-card {
@@ -3409,6 +3461,38 @@ button {
     height: 20px;
   }
 
+  .mobile-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mobile-guide-button {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    padding: 0;
+    color: var(--reader-ink);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .mobile-guide-button:hover {
+    opacity: 0.72;
+  }
+
+  .mobile-guide-button:focus-visible {
+    outline: 2px solid rgba(184, 199, 154, 0.9);
+    outline-offset: 2px;
+  }
+
+  .mobile-guide-button:disabled {
+    cursor: default;
+    opacity: 0.38;
+  }
+
   .mobile-search {
     display: flex;
     align-items: center;
@@ -3436,6 +3520,31 @@ button {
   }
 
   .library-header {
+    display: none;
+  }
+
+  .library-shelf-scroll {
+    padding: 10px 0 18px;
+  }
+
+  .book-group + .book-group {
+    margin-top: 32px;
+  }
+
+  .book-group-header {
+    align-items: flex-start;
+    padding: 0 4px 10px;
+  }
+
+  .book-group-header h2 {
+    font-size: 19px;
+  }
+
+  .book-group-header p {
+    font-size: 12px;
+  }
+
+  .book-group-header > span {
     display: none;
   }
 

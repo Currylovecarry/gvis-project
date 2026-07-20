@@ -4,6 +4,7 @@ import type {
   NarrativeJsonResponse,
   Relation,
 } from "../types/narrative";
+import { SYSTEM_GUIDE_BOOK_ID } from "./systemGuide";
 
 export type DemoNarrative = {
   id: string;
@@ -33,6 +34,64 @@ const character = (
 });
 
 export const DEMO_NARRATIVES: DemoNarrative[] = [
+  {
+    id: SYSTEM_GUIDE_BOOK_ID,
+    title: "三分钟认识微光",
+    characters: [
+      character("xiaolan", "小岚", {
+        description: "在雨天收到老朋友来信，决定赴约的读信人。",
+        evidence: "小岚在窗边拆开阿宁寄来的信。",
+      }),
+      character("aning", "阿宁", {
+        description: "小岚的老朋友，写信约她在旧车站见面。",
+        evidence: "周六下午，旧车站见。",
+      }),
+    ],
+    events: [
+      {
+        id: "g1",
+        order: 1,
+        description: "小岚收到阿宁的约见来信",
+        location: "窗边",
+        characters: ["xiaolan", "aning"],
+        character_importance: { xiaolan: 0.6, aning: 0.4 },
+        importance: "medium",
+        evidence: "小岚在窗边拆开阿宁寄来的信。",
+      },
+      {
+        id: "g2",
+        order: 2,
+        description: "旧车票唤起两人共同旅行的回忆",
+        location: "书桌",
+        characters: ["xiaolan", "aning"],
+        character_importance: { xiaolan: 0.5, aning: 0.5 },
+        importance: "medium",
+        evidence: "那是她和阿宁第一次一起远行时留下的。",
+      },
+      {
+        id: "g3",
+        order: 3,
+        description: "小岚决定周六前往旧车站赴约",
+        location: "小岚家",
+        characters: ["xiaolan", "aning"],
+        character_importance: { xiaolan: 0.65, aning: 0.35 },
+        importance: "high",
+        evidence: "小岚把旧车票放进外套口袋，决定周六去赴约。",
+      },
+    ],
+    relations: [
+      {
+        id: "gr1",
+        source: "xiaolan",
+        target: "aning",
+        relation_type: "friend",
+        description: "一起远行过的老朋友",
+        evidence: "那是她和阿宁第一次一起远行时留下的。",
+        confidence: 1,
+        revealPoint: 0.32,
+      },
+    ],
+  },
   {
     id: "fortune-and-love",
     title: "财神与爱神",
@@ -184,17 +243,22 @@ export type ProgressiveDemoMilestone = {
 };
 
 const PROGRESSIVE_DEMO_CONFIG: Record<string, ProgressiveDemoConfig> = {
-  "the-gift-of-the-magi": {
+  [SYSTEM_GUIDE_BOOK_ID]: {
+    narrativeId: SYSTEM_GUIDE_BOOK_ID,
+    revealPoints: [0, 0.32, 0.6],
+    mediumAutoRevealPoints: { g1: 0.08, g2: 0.42, g3: 0.7 },
+  },
+  "fortune-and-love": {
     narrativeId: "fortune-and-love",
     revealPoints: [0, 0.12, 0.27, 0.43, 0.61, 0.78, 0.92],
     mediumAutoRevealPoints: { f1: 0.06, f4: 0.43, f5: 0.61 },
   },
-  "tobin-s-palm": {
+  "tobins-palm": {
     narrativeId: "tobins-palm",
     revealPoints: [0, 0.1, 0.22, 0.35, 0.48, 0.61, 0.74, 0.88],
     mediumAutoRevealPoints: { t1: 0.05, t5: 0.48, t7: 0.74 },
   },
-  "the-shamrock-and-the-palm": {
+  "the-sham": {
     narrativeId: "the-sham",
     revealPoints: [0, 0.1, 0.23, 0.36, 0.49, 0.62, 0.75, 0.88],
     mediumAutoRevealPoints: { s1: 0.05, s2: 0.1, s7: 0.75 },

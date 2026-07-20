@@ -83,9 +83,9 @@ function formatLabel(format: BookFormat) {
 }
 
 const preloadedBooks = [
-  { path: "/books/财神与爱神 - 未知.epub", id: "the-gift-of-the-magi" },
-  { path: "/books/托宾的手相 - 未知.epub", id: "tobin-s-palm" },
-  { path: "/books/华而不实 - 未知.epub", id: "the-shamrock-and-the-palm" },
+  { path: "/books/财神与爱神 - 未知.epub", id: "fortune-and-love" },
+  { path: "/books/托宾的手相 - 未知.epub", id: "tobins-palm" },
+  { path: "/books/华而不实 - 未知.epub", id: "the-sham" },
   { path: "/books/玛吉登场 - 未知.epub", id: "maggie-appears" },
 ];
 
