@@ -191,6 +191,8 @@ export function CharacterGraph({ result, onClose }: CharacterGraphProps) {
         <div className="character-graph-actions">
           <button
             type="button"
+            aria-label="刷新人物关系图布局"
+            title="刷新"
             onClick={() => {
               const cy = cyRef.current;
               if (!cy) return;
@@ -198,7 +200,7 @@ export function CharacterGraph({ result, onClose }: CharacterGraphProps) {
               cy.fit(undefined, 56);
             }}
           >
-            整理
+            刷新
           </button>
           {onClose && (
             <button type="button" className="character-graph-close" onClick={onClose} aria-label="关闭人物关系图">
@@ -292,10 +294,10 @@ export function SidebarCharacterRelations({ result, onExpand, obscured = false }
               cy.layout({ ...sidebarLayout, animate: true, animationDuration: 220 }).run();
               cy.fit(undefined, 24);
             }}
-            aria-label="重新整理人物关系图"
-            title="重新整理"
+            aria-label="刷新人物关系图布局"
+            title="刷新"
           >
-            整理
+            刷新
           </button>
         </div>
       </header>

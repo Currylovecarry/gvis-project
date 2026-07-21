@@ -342,7 +342,7 @@ export function SidebarEventTimeline({
           </div>
         )}
         <div className="event-map-controls">
-          {variant !== "sidebar" && (
+          {variant === "demo" && (
             <>
               <button
                 type="button"
