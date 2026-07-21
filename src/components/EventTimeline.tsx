@@ -38,7 +38,7 @@ const SIDEBAR_EVENT_RADII: Record<NarrativeEvent["importance"], number> = {
   low: 11,
 };
 
-const CHARACTER_COLORS = ["#bed7ed", "#dce8ba", "#e6c6c4", "#c3b3d0", "#e6c48f", "#fcf8b9"];
+const CHARACTER_COLORS = ["#bed7ed", "#dce8ba", "#e6c6c4", "#c3b3d0", "#e6c48f", "#fcf8b9", "#d8e6e7"];
 const SUMMARY_CHARACTERS_PER_LINE = 6;
 const SUMMARY_LINE_HEIGHT = 14;
 const LOCATION_LABEL_MIN_WIDTH = 88;
