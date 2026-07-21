@@ -322,6 +322,9 @@ function App() {
 
     const log = completeExperimentSession(session, completionStatus, finalProgress);
     const locallyArchived = archiveExperimentLog(log);
+    if (completionStatus === "completed") {
+      downloadExperimentLog(log);
+    }
     experimentSessionRef.current = null;
     setExperimentReceipt({
       log,

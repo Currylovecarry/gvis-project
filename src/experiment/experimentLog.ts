@@ -216,7 +216,6 @@ export function downloadExperimentLog(log: ExperimentLog) {
     "gvis",
     sanitizeFilenamePart(log.participantId),
     sanitizeFilenamePart(log.book.title),
-    log.sessionId,
   ].join("-") + ".json";
   document.body.appendChild(anchor);
   anchor.click();
